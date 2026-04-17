@@ -1,0 +1,101 @@
+file_name,label
+handwriting_0000.png,- Terminvorschlag bis
+handwriting_0001.png,- Module an Michael
+handwriting_0002.png,Handschrift
+handwriting_0003.png,Datenschutz bei
+handwriting_0004.png,-> Urheberrecht
+handwriting_0005.png,Die Seerose blüht auf dem Teich.
+handwriting_0006.png,Studienfinanzierung erfordert Planung.
+handwriting_0007.png,Misserfolgsszenario: 1. Tabelle beinhaltet fehlerhafte Eigenschaften
+handwriting_0008.png,2. Änderungen verwerfen/auf vorherige Werte zurücksetzen
+handwriting_0009.png,Erfolgsgarantie: Speicherung der veränderten Werte
+handwriting_0010.png,Vorbedingungen: Tabelle zum Bearbeiten existiert
+handwriting_0011.png,Mindestgarantie: Speicherung der momentane Eigenschaften
+handwriting_0012.png,"- MCAR = zufälliges Fehlen von Daten, unsystematische Fehler"
+handwriting_0013.png,- MCAR    - MAR    - NMAR
+handwriting_0014.png,- Mechanismen die zu Fehldaten führen
+handwriting_0015.png,ausgewählten Merkmalsträger
+handwriting_0016.png,- Item-Nonresponse / Fehlende Werte: es fehlen einzelne Daten bei einem
+handwriting_0017.png,"den man gewählt hat, zu bekommen"
+handwriting_0018.png,- Unit-Nonresponse / Totalausfälle: keine Daten von einem Merkmalsträger
+handwriting_0019.png,=> Die Zielpersonen die bereit sind mitzumachen.
+handwriting_0020.png,minus systematische Ausfälle.
+handwriting_0021.png,- Nettostichprobe: realisierte Stichprobe. d.h bereinigte Bruttostichprobe
+handwriting_0022.png,z.B. Verstorbene werden aus Umfrage rausgenommen
+handwriting_0023.png,- Bereinigte Bruttostichprobe: Bruttostichprobe minus stichprobenneutrale Ausfälle
+handwriting_0024.png,- Bruttostichprobe: gezogene Stichprobe vor Realisierung
+handwriting_0025.png,"- Definitionen: Ausschöpfung, Nonresponse, Fehldaten"
+handwriting_0026.png,- Schwächen von ZSP und Gegenmaßnahmen
+handwriting_0027.png,- bessere statistische Auswertung
+handwriting_0028.png,"weniger Gewicht, damit ausgeglichen"
+handwriting_0029.png,"(keine Zufallsschwankung)    -> ""seltenere"" Gruppen häufiger, aber"
+handwriting_0030.png,- Vorteil gegenüber einfacher
+handwriting_0031.png,statistische Auswertungen machen zu können
+handwriting_0032.png,"- Jedes Element der GG eine bekannte Wahrscheinlichkeit, in die SP zu kommen"
+handwriting_0033.png,- Zufallsstichprobe aus jeder Gruppe
+handwriting_0034.png,- Jedes Element der GG gehört nur zu einer Gruppe der AG
+handwriting_0035.png,Mittelwert des Populationsparameters = Gausche Normalverteilung.
+handwriting_0036.png,-> Der Mittelwert der Mittelwerte der ZSP ist der tatsächliche
+handwriting_0037.png,- Berechnung der Mittelwerte der ZSP.
+handwriting_0038.png,- Bedingung: Zufallsauswahl
+handwriting_0039.png,der wahre GG-Parameter mit einer bestimmten Wahrscheinlichkeit befindet
+handwriting_0040.png,"- Konfindenzintervalle kennzeichnen einen Wertebereich, in welchem sich"
+handwriting_0041.png,- Jede ZufallsSP ergibt nur eine mögliche Realisierung
+handwriting_0042.png,- Schätzung Populationsparameter / Grundgesamtheit
+handwriting_0043.png,"=> Je größer SP, desto eher passt sie zu GG"
+handwriting_0044.png,Statistiken der SP von Parametern der GG abweichen
+handwriting_0045.png,"-> Je größer die SP, desto geringer die Wahrscheinlichkeit, dass"
+handwriting_0046.png,- Aussage über Wahrscheinlichkeiten von Eigenschaften der Stichprobe:
+handwriting_0047.png,-> Seltene Ereignisse der GG gelangen selten in SP
+handwriting_0048.png,- Aussage über Wahrscheinlichkeiten des Auftretens einzelner Ereignisse:
+handwriting_0049.png,- Gesetz der großen Zahl für ALLE ZufallsSP
+handwriting_0050.png,- Nicht-zufällige Stichprobe: - willkürliche Auswahl -> keine Möglichkeit
+handwriting_0051.png,- Zufallsstichprobe -> Statistische Gesetze
+handwriting_0052.png,"- Wie kann man wissen, ob gefundene Muster der SP auch für Grundgesamtheit gelten?"
+handwriting_0053.png,"- Ziele: Identifikation typischer Muster, Überprüfung vorhandener Theorie"
+handwriting_0054.png,- Von der Stichprobe zur Grundgesamtheit
+handwriting_0055.png,- Forschungsdesign
+handwriting_0056.png,- Datenlage
+handwriting_0057.png,- Ressourcen
+handwriting_0058.png,- Abhängig von: - Forschungsfrage    Stichprobe
+handwriting_0059.png,die Stichprobe zu kommen.
+handwriting_0060.png,"- Die Wahrscheinlichkeit, aller Elemente des Auswahlgrundgesamtheit in"
+handwriting_0061.png,- Ziele: - Jedes Element der Stichprobe Teil der Auswahlgrundgesamtheit
+handwriting_0062.png,- Situationen / Ereignisse   \ - Texte/Bilder/Filme
+handwriting_0063.png,- Individuen | Personen   \ - soziale Kollektive / Organisationen
+handwriting_0064.png,- Gegenstand der Auswahl
+handwriting_0065.png,Datenlage
+handwriting_0066.png,- Auswahlgesamtheit: empirisch mögliche Grundgesamtheit der gegebenen
+handwriting_0067.png,innerhalb der Reichweite der Theorie sein.
+handwriting_0068.png,- In der (angestrebten) Grundgesamtheit müssen alle Merkmalsträger
+handwriting_0069.png,- Quelle für Auswahl
+handwriting_0070.png,- Brückenhypothesen zwischen zwei datenorientierten Grundgesamtheiten eventuell
+handwriting_0071.png,- Menge an ausgewählten Merkmalsträgern: objekt-/elementorientierte Stichprobe
+handwriting_0072.png,anderen Merkmalsträger etwas wissentschaftliches sagen zu können.
+handwriting_0073.png,"mit dem Ziel, über die Merkmalsausprägungen der Merkmalsträger und"
+handwriting_0074.png,- Eine Auswahl ist die nachvollziebare Selektion von Merkmalsträgern
+handwriting_0075.png,- Notwendigkeit der Auswahl
+handwriting_0076.png,- Bestimmung der Skala mit gewichteter Zusammensetzung der gegebenen Antworten
+handwriting_0077.png,- Analyse der Antworten (Korrelationen)
+handwriting_0078.png,potenziellen Indikatoren für Skala.
+handwriting_0079.png,- Bildung der Likert-Skala: - Auswahl einer großen Anzahl von
+handwriting_0080.png,- Befragte müssen zustimmen oder ablehnen in Abstufungen.
+handwriting_0081.png,"- Likert-Skala: - Metrische Variable, sehr häufig in Umfrageforschung"
+handwriting_0082.png,besseres Bild
+handwriting_0083.png,- Idee: Durch das zusammenführen mehrerer Messdaten bekommen wir ein
+handwriting_0084.png,- Eine Skala bildet nur eine Dimension eines Konstruktes ab.
+handwriting_0085.png,"von Werten mehrerer Indikatorvariablen, zustande kommt."
+handwriting_0086.png,"- Skala: - Eine Variable, die aus einer gewichteten Zusammensetzung"
+handwriting_0087.png,in mehreren Dimensionen mit dem zu messenden Konzept korrelieren.
+handwriting_0088.png,- Index: Eine zusammengefasste Maßzahl von Indikatoren welche
+handwriting_0089.png,- Dimensionen korrelieren nicht
+handwriting_0090.png,- Typologie: - Klassifikationsschema mit mindestens 2 Dimensionen
+handwriting_0091.png,Außerdem kann sie nur durch manifeste Variablen direkt gemessen werden.
+handwriting_0092.png,deren Dimensionen nur in einem Index/Skala korrelieren können.
+handwriting_0093.png,"- Viele theoretische Konzepte bestehehen aus mehreren Dimensionen,"
+handwriting_0094.png,- Grundidee der Mehr-Variablen-Messung: (Messung latenter Variablen)
+handwriting_0095.png,= Hat einen tatsächlichen Wert in der Wirklichkeit
+handwriting_0096.png,Abstände zwischen den Objekten in der Rangfolge
+handwriting_0097.png,- Metrisch  = Unterscheidung mit Rangfolge und bedeutung auf die
+handwriting_0098.png,- Ordinal = Unterscheidung mit Rangfolge
+handwriting_0099.png,- Nominal = Unterscheidung von vorhanden oder nicht vorhanden
