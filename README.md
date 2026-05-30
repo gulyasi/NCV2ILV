@@ -150,6 +150,33 @@ uv run python main.py data synthetic --variants 8 --seed 7
 uv run python main.py render "The quick brown fox jumps over the lazy dog." --engine glyph --library data/synthetic_glyph_library.json -o outputs/synthetic_pangram.pdf --seed 7
 ```
 
+
+## Evaluation Report
+
+Run the full benchmark/report command:
+
+```bash
+uv run python main.py evaluate
+```
+
+This writes:
+
+```text
+outputs/evaluation/EVALUATION_REPORT.md
+outputs/evaluation/evaluation_results.json
+outputs/evaluation/render/
+outputs/evaluation/ocr/
+```
+
+The report compares three baselines against the current proposed renderer:
+
+- `baseline_font_jitter`: readable handwritten-font baseline.
+- `baseline_synthetic_glyph_retrieval`: clean glyph retrieval baseline.
+- `baseline_extracted_glyph_retrieval`: noisy dataset-extracted glyph baseline.
+- `proposed_script_renderer`: connected pen-stroke renderer used as the current project model.
+
+The OCR section validates image-to-text-PDF output on bundled labeled dataset samples using metadata labels. That is useful for pipeline evaluation, but it is an oracle setting rather than a claim that arbitrary handwriting OCR is solved.
+
 ## Data Strategy
 
 The old German line-image dataset is useful for OCR experiments, but it is a poor source for glyph composition because connected words are hard to split into correctly labeled characters. Prefer these sources, in this order:

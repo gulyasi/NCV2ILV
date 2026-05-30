@@ -5,6 +5,7 @@ from pathlib import Path
 from src.baselines import run_baselines
 from src.composer import compose, format_report
 from src.demo import run_demo
+from src.evaluation import run_evaluation
 from src.golden_set import run_golden_set
 from src.ocr_pipeline import image_to_pdf
 from src.synthetic_glyphs import generate_synthetic_glyphs
@@ -21,6 +22,7 @@ def main() -> None:
             "  uv run python main.py template make -o outputs/handwriting_template.pdf\n"
             "  uv run python main.py data synthetic\n"
             "  uv run python main.py baseline\n"
+            "  uv run python main.py evaluate\n"
             "  uv run python main.py image-to-pdf data/raw_handwriting/handwriting_0005.png"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -31,6 +33,9 @@ def main() -> None:
 
     demo_parser = subparsers.add_parser("demo", help="Run all MVP workflows and write a demo report")
     demo_parser.add_argument("-o", "--output-dir", default="outputs/demo")
+
+    evaluate_parser = subparsers.add_parser("evaluate", help="Run benchmark evaluation and write a report")
+    evaluate_parser.add_argument("-o", "--output-dir", default="outputs/evaluation")
 
     ocr_parser = subparsers.add_parser("image-to-pdf", help="Transcribe a handwritten image and save recognized text as PDF")
     ocr_parser.add_argument("image")
@@ -104,7 +109,9 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if args.command == "demo":
+    if args.command == "evaluate":
+        run_evaluation(args.output_dir)
+    elif args.command == "demo":
         run_demo(args.output_dir)
     elif args.command == "image-to-pdf":
         result = image_to_pdf(
