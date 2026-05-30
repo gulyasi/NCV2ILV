@@ -24,6 +24,11 @@ DEFAULT_FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf"
 FONT_SIZE = 72
 FONT_LINE_HEIGHT = 125
 FONT_WORD_SPACE = 38
+SCRIPT_LINE_HEIGHT = 150
+SCRIPT_WORD_SPACE = 76
+SCRIPT_LETTER_WIDTH = 64
+SCRIPT_LETTER_HEIGHT = 92
+SCRIPT_BASELINE = 92
 
 
 @dataclass
@@ -337,6 +342,139 @@ def compose_font(
     return report
 
 
+
+def draw_smooth_line(draw: ImageDraw.ImageDraw, points: list[tuple[float, float]], width: int = 5) -> None:
+    if len(points) < 2:
+        return
+    draw.line(points, fill=0, width=width, joint="curve")
+
+
+def cubic_points(p0, p1, p2, p3, steps: int = 18) -> list[tuple[float, float]]:
+    pts = []
+    for i in range(steps + 1):
+        t = i / steps
+        x = (1 - t) ** 3 * p0[0] + 3 * (1 - t) ** 2 * t * p1[0] + 3 * (1 - t) * t**2 * p2[0] + t**3 * p3[0]
+        y = (1 - t) ** 3 * p0[1] + 3 * (1 - t) ** 2 * t * p1[1] + 3 * (1 - t) * t**2 * p2[1] + t**3 * p3[1]
+        pts.append((x, y))
+    return pts
+
+
+def script_tile(char: str, rng: random.Random) -> tuple[Image.Image, int]:
+    w = SCRIPT_LETTER_WIDTH
+    h = SCRIPT_LETTER_HEIGHT + 28
+    tile = Image.new("L", (w + 18, h), 255)
+    draw = ImageDraw.Draw(tile)
+    base = SCRIPT_BASELINE
+    top = 18
+    mid = 54
+    left = 8
+    right = w - 5
+    c = char.lower()
+    width = rng.randint(4, 6)
+
+    def pts(norm):
+        return [(left + x * (right - left), top + y * (base - top)) for x, y in norm]
+
+    if c in "aceos":
+        # Small loop letters.
+        oval = [
+            (0.78, 0.55), (0.65, 0.22), (0.30, 0.22), (0.20, 0.55),
+            (0.12, 0.88), (0.48, 0.98), (0.78, 0.78), (0.96, 0.62),
+        ]
+        draw_smooth_line(draw, pts(oval), width)
+        if c == "e":
+            draw_smooth_line(draw, pts([(0.20, 0.62), (0.55, 0.55), (0.85, 0.48)]), width)
+        elif c == "s":
+            draw_smooth_line(draw, pts([(0.78, 0.35), (0.36, 0.22), (0.24, 0.48), (0.76, 0.68), (0.42, 0.96)]), width)
+        elif c == "c":
+            draw_smooth_line(draw, pts([(0.78, 0.32), (0.35, 0.20), (0.16, 0.58), (0.42, 0.96), (0.86, 0.78)]), width)
+    elif c in "il":
+        draw_smooth_line(draw, pts([(0.35, 0.95), (0.48, 0.10), (0.62, 0.95), (0.92, 0.82)]), width)
+        if c == "i":
+            draw.ellipse((left + 25, top - 6, left + 35, top + 4), fill=0)
+    elif c == "h":
+        draw_smooth_line(draw, pts([(0.18, 0.95), (0.25, 0.02), (0.36, 0.35), (0.18, 0.98)]), width)
+        draw_smooth_line(draw, pts([(0.30, 0.70), (0.52, 0.32), (0.76, 0.58), (0.82, 0.95), (0.98, 0.82)]), width)
+    elif c == "t":
+        draw_smooth_line(draw, pts([(0.35, 0.12), (0.48, 0.95), (0.85, 0.80)]), width)
+        draw_smooth_line(draw, pts([(0.18, 0.42), (0.78, 0.36)]), max(3, width - 1))
+    elif c == "a":
+        draw_smooth_line(draw, pts([(0.76, 0.58), (0.55, 0.25), (0.20, 0.42), (0.18, 0.78), (0.48, 0.96), (0.76, 0.65), (0.84, 0.95), (0.98, 0.82)]), width)
+    elif c == "r":
+        draw_smooth_line(draw, pts([(0.25, 0.96), (0.36, 0.36), (0.48, 0.55), (0.66, 0.34), (0.88, 0.46)]), width)
+    elif c in "mn":
+        arches = [(0.18, 0.95), (0.28, 0.42), (0.45, 0.92), (0.58, 0.42), (0.76, 0.92), (0.96, 0.82)] if c == "m" else [(0.24, 0.95), (0.36, 0.42), (0.62, 0.92), (0.94, 0.82)]
+        draw_smooth_line(draw, pts(arches), width)
+    elif c in "uvwy":
+        seq = [(0.15, 0.42), (0.30, 0.95), (0.52, 0.54), (0.70, 0.95), (0.96, 0.78)]
+        if c == "y":
+            seq = [(0.15, 0.42), (0.32, 0.95), (0.58, 0.54), (0.50, 1.18), (0.30, 1.25), (0.88, 0.80)]
+        elif c == "w":
+            seq = [(0.10, 0.42), (0.24, 0.95), (0.42, 0.55), (0.58, 0.95), (0.76, 0.55), (0.96, 0.80)]
+        draw_smooth_line(draw, pts(seq), width)
+    elif c in "bdkp":
+        stem_x = 0.28
+        draw_smooth_line(draw, pts([(stem_x, 0.96), (stem_x, 0.02)]), width)
+        if c in "bp":
+            loop = [(0.30, 0.48), (0.75, 0.28), (0.92, 0.68), (0.55, 0.96), (0.30, 0.78)]
+            if c == "p":
+                draw_smooth_line(draw, pts([(stem_x, 0.42), (stem_x, 1.22)]), width)
+        elif c == "d":
+            loop = [(0.30, 0.78), (0.58, 0.35), (0.90, 0.58), (0.72, 0.96), (0.35, 0.92)]
+        else:
+            loop = [(0.30, 0.68), (0.78, 0.34), (0.42, 0.66), (0.88, 0.96)]
+        draw_smooth_line(draw, pts(loop), width)
+    elif c in "fgjqz":
+        draw_smooth_line(draw, pts([(0.70, 0.20), (0.36, 0.18), (0.30, 0.72), (0.52, 1.20), (0.24, 1.30), (0.88, 0.80)]), width)
+        if c == "j":
+            draw.ellipse((left + 25, top - 6, left + 35, top + 4), fill=0)
+    elif c == "x":
+        draw_smooth_line(draw, pts([(0.20, 0.35), (0.80, 0.96)]), width)
+        draw_smooth_line(draw, pts([(0.78, 0.35), (0.22, 0.96), (0.96, 0.80)]), width)
+    else:
+        font = load_font(None, 74)
+        draw.text((10, 16), char, font=font, fill=0)
+
+    if char.isupper():
+        tile = tile.resize((int(tile.width * 1.18), int(tile.height * 1.12)), Image.Resampling.LANCZOS)
+    angle = rng.uniform(-2.0, 2.0)
+    tile = tile.rotate(angle, expand=True, fillcolor=255)
+    advance = max(24, int(SCRIPT_LETTER_WIDTH * rng.uniform(0.55, 0.76)))
+    return tile, advance
+
+
+def compose_script(text: str, output_name: str = "handwritten_result.pdf", seed: int | None = None, jitter: bool = True) -> ComposeReport:
+    rng = random.Random(seed)
+    text = normalize_text(text)
+    page = Image.new("L", PAGE_SIZE, 255)
+    x, baseline_y = MARGIN_X, MARGIN_Y + SCRIPT_BASELINE
+    report = ComposeReport(output_path=output_name, engine="script")
+
+    for char in text:
+        if char == "\n":
+            x = MARGIN_X
+            baseline_y += SCRIPT_LINE_HEIGHT
+            report.lines += 1
+            continue
+        if char == " ":
+            x += SCRIPT_WORD_SPACE + rng.randint(-8, 8)
+            continue
+        tile, advance = script_tile(char, rng)
+        if x + tile.width > MAX_X:
+            x = MARGIN_X
+            baseline_y += SCRIPT_LINE_HEIGHT
+            report.lines += 1
+        if baseline_y > MAX_Y:
+            report.overflow = True
+            continue
+        mask = tile.point(lambda p: 255 if p < 230 else 0)
+        page.paste(Image.new("L", tile.size, 0), (x, baseline_y - int(tile.height * 0.78)), mask)
+        x += advance
+        report.rendered += 1
+
+    save_page(page, output_name)
+    return report
+
 def compose(
     text: str,
     output_name: str = "handwritten_result.pdf",
@@ -349,6 +487,8 @@ def compose(
 ) -> ComposeReport:
     if engine == "glyph":
         return compose_glyph(text, output_name, library_path, writer, seed, jitter)
+    if engine == "script":
+        return compose_script(text, output_name, seed=seed, jitter=jitter)
     if engine == "font":
         return compose_font(text, output_name, font_path=font_path, seed=seed, jitter=jitter)
     raise ValueError(f"Unknown engine: {engine}")
@@ -369,7 +509,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Render text using a legible font engine or the extracted glyph library.")
     parser.add_argument("text", nargs="?", default="this is a test.")
     parser.add_argument("-o", "--output", default="handwritten_result.pdf")
-    parser.add_argument("--engine", choices=["font", "glyph"], default="font")
+    parser.add_argument("--engine", choices=["font", "glyph", "script"], default="script")
     parser.add_argument("--library", default="data/glyph_library.json")
     parser.add_argument("--writer", default=None, help="Optional writer token to filter glyph filenames, e.g. writer1")
     parser.add_argument("--font", default=None, help="Optional .ttf/.otf path for the font engine")

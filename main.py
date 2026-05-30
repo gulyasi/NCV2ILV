@@ -1,5 +1,6 @@
 import argparse
 import sys
+from pathlib import Path
 
 from src.baselines import run_baselines
 from src.composer import compose, format_report
@@ -14,7 +15,7 @@ def main() -> None:
         description="Personal handwriting rendering prototype",
         epilog=(
             "Examples:\n"
-            "  uv run python main.py render \"The quick brown fox jumps over the lazy dog.\" -o outputs/pangram.pdf\n"
+            "  uv run python main.py handwrite \"The quick brown fox jumps over the lazy dog.\" -o outputs/pangram.pdf\n"
             "  uv run python main.py golden\n"
             "  uv run python main.py template make -o outputs/handwriting_template.pdf\n"
             "  uv run python main.py data synthetic\n"
@@ -33,10 +34,20 @@ def main() -> None:
     ocr_parser.add_argument("--metadata", default="data/metadata.csv")
     ocr_parser.add_argument("--tesseract-lang", default="eng")
 
+
+    handwrite_parser = subparsers.add_parser("handwrite", help="Render text using glyph-based handwriting")
+    handwrite_parser.add_argument("text")
+    handwrite_parser.add_argument("-o", "--output", default="outputs/handwriting.pdf")
+    handwrite_parser.add_argument("--engine", choices=["script", "glyph"], default="script")
+    handwrite_parser.add_argument("--library", default="data/synthetic_glyph_library.json")
+    handwrite_parser.add_argument("--variants", type=int, default=8)
+    handwrite_parser.add_argument("--seed", type=int, default=7)
+    handwrite_parser.add_argument("--no-jitter", action="store_true")
+
     render_parser = subparsers.add_parser("render", help="Render one text string to PNG or PDF")
     render_parser.add_argument("text")
     render_parser.add_argument("-o", "--output", default="outputs/handwritten_result.pdf")
-    render_parser.add_argument("--engine", choices=["font", "glyph"], default="font")
+    render_parser.add_argument("--engine", choices=["font", "glyph", "script"], default="font")
     render_parser.add_argument("--library", default="data/glyph_library.json")
     render_parser.add_argument("--writer", default=None)
     render_parser.add_argument("--font", default=None)
@@ -45,7 +56,7 @@ def main() -> None:
 
     golden_parser = subparsers.add_parser("golden", help="Generate the five proposal golden-set PDFs")
     golden_parser.add_argument("-o", "--output-dir", default="outputs/golden_set")
-    golden_parser.add_argument("--engine", choices=["font", "glyph"], default="font")
+    golden_parser.add_argument("--engine", choices=["font", "glyph", "script"], default="font")
     golden_parser.add_argument("--library", default="data/glyph_library.json")
     golden_parser.add_argument("--writer", default=None)
     golden_parser.add_argument("--font", default=None)
@@ -99,6 +110,20 @@ def main() -> None:
         print(f"Created {result.output_path}")
         print(f"Method: {result.method}")
         print(f"Text: {result.text}")
+
+    elif args.command == "handwrite":
+        library_path = Path(args.library)
+        if args.engine == "glyph" and not library_path.exists():
+            generate_synthetic_glyphs(library_path=str(library_path), variants=args.variants, seed=args.seed)
+        report = compose(
+            args.text,
+            output_name=args.output,
+            library_path=str(library_path),
+            seed=args.seed,
+            jitter=not args.no_jitter,
+            engine=args.engine,
+        )
+        print(format_report(report))
     elif args.command == "render":
         report = compose(
             args.text,

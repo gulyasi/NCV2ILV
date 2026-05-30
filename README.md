@@ -37,6 +37,21 @@ Generate the five golden-set PDFs with the default readable engine:
 uv run python main.py golden
 ```
 
+
+Generate connected script-style handwriting directly:
+
+```bash
+uv run python main.py handwrite "hello this is a test" -o outputs/hello_handwrite.pdf
+```
+
+This uses the connected script renderer by default, which looks more handwriting-like than the font renderer.
+
+For glyph retrieval specifically:
+
+```bash
+uv run python main.py handwrite "hello this is a test" --engine glyph -o outputs/hello_glyph.pdf
+```
+
 Run the extracted-glyph engine, which uses the current dirty glyph library:
 
 ```bash
@@ -62,6 +77,7 @@ uv run python main.py render "hello from my handwriting" --engine glyph --librar
 ## Useful Options
 
 - `--engine font`: readable default renderer.
+- `handwrite`: shortcut for connected script-style text-to-handwriting output.
 - `--engine glyph`: use extracted glyph crops from a glyph JSON.
 - `--writer writer1`: filter glyphs to filenames containing a writer token.
 - `--library path/to/glyph_library.json`: use another glyph library.
