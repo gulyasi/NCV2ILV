@@ -41,4 +41,4 @@ def download_with_labels(limit=50):
     print(f"Labels are recorded in: {metadata_path}")
 
 if __name__ == "__main__":
-    download_with_labels(100) # Increased to 100 for a better golden set
+    download_with_labels(100)

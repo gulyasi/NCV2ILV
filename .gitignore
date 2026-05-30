@@ -1,4 +1,4 @@
-# Python-generate files
+# Python-generated files
 __pycache__/
 *.py[oc]
 build/
@@ -6,6 +6,24 @@ dist/
 wheels/
 *egg-info
 
-# Virutal environments
+# Virtual environments
 .venv
 .env
+
+# Generated outputs and local artifacts
+outputs/
+*.log
+.DS_Store
+
+# Local generated previews/debug images
+debug_*.png
+handwritten_*.png
+synthetic_output.png
+
+# Generated glyph-library experiments
+data/glyph_library_filtered.json
+data/glyph_library_strict.json
+data/blank_template_extract_test/
+# Regenerable synthetic glyph data
+data/synthetic_glyphs/
+data/synthetic_glyph_library.json
