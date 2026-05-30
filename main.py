@@ -4,6 +4,7 @@ from pathlib import Path
 
 from src.baselines import run_baselines
 from src.composer import compose, format_report
+from src.demo import run_demo
 from src.golden_set import run_golden_set
 from src.ocr_pipeline import image_to_pdf
 from src.synthetic_glyphs import generate_synthetic_glyphs
@@ -26,6 +27,10 @@ def main() -> None:
     )
     subparsers = parser.add_subparsers(dest="command")
 
+
+
+    demo_parser = subparsers.add_parser("demo", help="Run all MVP workflows and write a demo report")
+    demo_parser.add_argument("-o", "--output-dir", default="outputs/demo")
 
     ocr_parser = subparsers.add_parser("image-to-pdf", help="Transcribe a handwritten image and save recognized text as PDF")
     ocr_parser.add_argument("image")
@@ -99,7 +104,9 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if args.command == "image-to-pdf":
+    if args.command == "demo":
+        run_demo(args.output_dir)
+    elif args.command == "image-to-pdf":
         result = image_to_pdf(
             args.image,
             output_path=args.output,

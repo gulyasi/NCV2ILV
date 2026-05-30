@@ -13,9 +13,19 @@ Prototype for converting handwritten image input into recognized text PDFs, plus
 - Generates a printable template sheet for collecting clean personal handwriting glyphs.
 - Generates a clean synthetic glyph dataset for baseline/testing.
 - Generates baseline comparison PDFs and a metrics report.
+- Runs a complete demo workflow with one command.
 
 ## Quick Start
 
+
+
+Run the full MVP demo:
+
+```bash
+uv run python main.py demo
+```
+
+This creates OCR outputs, handwriting outputs, baselines, golden-set PDFs, a handwriting template, and `outputs/demo/DEMO_REPORT.md`.
 
 Convert a handwriting image to a text PDF:
 
@@ -190,6 +200,7 @@ This removes obvious bad crops, but the real fix is collecting isolated template
 ## Main Files
 
 - `main.py`: command-line entry point.
+- `src/demo.py`: complete MVP demo runner.
 - `src/ocr_pipeline.py`: handwritten image transcription and text-PDF output.
 - `src/composer.py`: text-to-page renderer and coverage reporting.
 - `src/baselines.py`: baseline rendering comparison and report generation.
