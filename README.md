@@ -33,7 +33,7 @@ Convert a handwriting image to a text PDF:
 uv run python main.py image-to-pdf data/raw_handwriting/handwriting_0005.png -o outputs/transcription.pdf
 ```
 
-The default `auto` OCR mode first uses `data/metadata.csv` when the image is from the bundled labeled dataset. For unknown images, it can use local Tesseract if installed, or Qwen with `--method qwen` when model downloads are available.
+The default `auto` OCR mode first uses `data/metadata.csv` when the image is from the bundled labeled dataset. For unknown images, it can use local Tesseract if installed, or Qwen with `--method qwen` when model downloads are available. Inspired by the attached HTR paper, OCR runs can also use targeted image preprocessing such as Otsu thresholding, adaptive thresholding, denoising, and deskewing.
 
 Render one readable PDF with the default engine:
 
@@ -113,6 +113,15 @@ OCR methods:
 - `--method metadata`: only use labels from `data/metadata.csv`; useful for validating the pipeline on known data.
 - `--method tesseract`: use a local Tesseract install if available.
 - `--method qwen`: use the existing Qwen vision-language OCR wrapper; this may require model downloads and enough memory.
+- `--preprocess otsu|adaptive|denoise-deskew`: prepare unknown images before Tesseract or Qwen OCR.
+- `--ensemble-preprocess`: run Tesseract across several preprocessing variants and keep the most plausible transcript.
+
+Example with preprocessing for an unknown image:
+
+```bash
+uv run python main.py image-to-pdf path/to/handwritten_image.png --method tesseract --preprocess denoise-deskew -o outputs/preprocessed_transcription.pdf
+uv run python main.py image-to-pdf path/to/handwritten_image.png --method tesseract --ensemble-preprocess -o outputs/ensemble_transcription.pdf
+```
 
 Example with a known bundled image:
 
@@ -175,7 +184,7 @@ The report compares three baselines against the current proposed renderer:
 - `baseline_extracted_glyph_retrieval`: noisy dataset-extracted glyph baseline.
 - `proposed_script_renderer`: connected pen-stroke renderer used as the current project model.
 
-The OCR section validates image-to-text-PDF output on bundled labeled dataset samples using metadata labels. That is useful for pipeline evaluation, but it is an oracle setting rather than a claim that arbitrary handwriting OCR is solved.
+The OCR section validates image-to-text-PDF output on bundled labeled dataset samples using metadata labels. It reports character error rate (CER), word error rate (WER), and sequence similarity. With the default metadata method this is an oracle pipeline validation rather than a claim that arbitrary handwriting OCR is solved; use `image-to-pdf --method tesseract --preprocess ...` or `--ensemble-preprocess` for non-oracle OCR experiments.
 
 ## Data Strategy
 
@@ -210,7 +219,7 @@ This removes obvious bad crops, but the real fix is collecting isolated template
 - The `glyph` engine can represent personal handwriting, but only after collecting clean template glyphs.
 - The original dataset-derived glyph library is polluted by word fragments and mislabeled crops.
 - Layout is functional but simple: it does word wrapping and explicit line breaks, not paragraph-level typography.
-- OCR/transcription experiments are present, but they are not required for rendering text into handwriting.
+- OCR/transcription experiments include preprocessing and CER/WER metrics, but they are not required for rendering text into handwriting.
 
 
 ## Project Layout

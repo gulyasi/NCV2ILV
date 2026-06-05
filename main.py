@@ -8,6 +8,7 @@ from src.demo import run_demo
 from src.evaluation import run_evaluation
 from src.golden_set import run_golden_set
 from src.ocr_pipeline import image_to_pdf
+from src.ocr_preprocessing import PREPROCESSING_MODES
 from src.synthetic_glyphs import generate_synthetic_glyphs
 from src.template_tools import extract_template, make_template
 
@@ -43,6 +44,8 @@ def main() -> None:
     ocr_parser.add_argument("--method", choices=["auto", "metadata", "tesseract", "qwen"], default="auto")
     ocr_parser.add_argument("--metadata", default="data/metadata.csv")
     ocr_parser.add_argument("--tesseract-lang", default="eng")
+    ocr_parser.add_argument("--preprocess", choices=PREPROCESSING_MODES, default="none")
+    ocr_parser.add_argument("--ensemble-preprocess", action="store_true")
 
 
     handwrite_parser = subparsers.add_parser("handwrite", help="Render text using glyph-based handwriting")
@@ -120,6 +123,8 @@ def main() -> None:
             method=args.method,
             metadata_path=args.metadata,
             tesseract_lang=args.tesseract_lang,
+            preprocess=args.preprocess,
+            ensemble_preprocess=args.ensemble_preprocess,
         )
         print(f"Created {result.output_path}")
         print(f"Method: {result.method}")

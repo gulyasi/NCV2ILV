@@ -7,6 +7,7 @@ from statistics import mean
 
 from .composer import compose
 from .golden_set import GOLDEN_QUERIES
+from .ocr_metrics import character_error_rate, word_error_rate
 from .ocr_pipeline import image_to_pdf, load_metadata
 from .synthetic_glyphs import generate_synthetic_glyphs
 
@@ -80,6 +81,8 @@ def run_ocr_benchmark(out: Path, metadata_path: str = "data/metadata.csv") -> li
             continue
         result = image_to_pdf(str(image), output_path=str(ocr_dir / f"{image.stem}.pdf"), method="metadata")
         similarity = difflib.SequenceMatcher(None, expected, result.text).ratio()
+        cer = character_error_rate(expected, result.text)
+        wer = word_error_rate(expected, result.text)
         rows.append(
             {
                 "image": str(image),
@@ -88,6 +91,8 @@ def run_ocr_benchmark(out: Path, metadata_path: str = "data/metadata.csv") -> li
                 "prediction": result.text,
                 "exact_match": expected == result.text,
                 "sequence_similarity": similarity,
+                "character_error_rate": cer,
+                "word_error_rate": wer,
                 "output_path": result.output_path,
                 "note": "Metadata method is oracle validation of PDF pipeline, not arbitrary OCR.",
             }
@@ -118,14 +123,18 @@ def write_report(out: Path, render_rows: list[dict], render_summary: list[dict],
     for row in render_rows:
         lines.append(f"| {row['model']} | {row['query']} | {row['coverage']:.1%} | {row['missing_total']} | {row['lines']} | {row['overflow']} | `{row['output_path']}` |")
 
-    lines += ["", "## OCR / Image-To-PDF Benchmark", "", "| Image | Method | Exact | Similarity | Expected | Prediction | Output |", "|---|---|---:|---:|---|---|---|"]
+    lines += ["", "## OCR / Image-To-PDF Benchmark", "", "| Image | Method | Exact | CER | WER | Similarity | Expected | Prediction | Output |", "|---|---|---:|---:|---:|---:|---|---|---|"]
     for row in ocr_rows:
-        lines.append(f"| {Path(row['image']).name} | {row['method']} | {row['exact_match']} | {row['sequence_similarity']:.1%} | {row['expected']} | {row['prediction']} | `{row['output_path']}` |")
+        lines.append(f"| {Path(row['image']).name} | {row['method']} | {row['exact_match']} | {row['character_error_rate']:.1%} | {row['word_error_rate']:.1%} | {row['sequence_similarity']:.1%} | {row['expected']} | {row['prediction']} | `{row['output_path']}` |")
     avg_sim = mean(row["sequence_similarity"] for row in ocr_rows) if ocr_rows else 0.0
+    avg_cer = mean(row["character_error_rate"] for row in ocr_rows) if ocr_rows else 0.0
+    avg_wer = mean(row["word_error_rate"] for row in ocr_rows) if ocr_rows else 0.0
     exact = sum(1 for row in ocr_rows if row["exact_match"])
     lines += [
         "",
         f"OCR exact matches: {exact}/{len(ocr_rows)}",
+        f"OCR average CER: {avg_cer:.1%}",
+        f"OCR average WER: {avg_wer:.1%}",
         f"OCR average sequence similarity: {avg_sim:.1%}",
         "",
         "## Interpretation",
@@ -134,6 +143,8 @@ def write_report(out: Path, render_rows: list[dict], render_summary: list[dict],
         "- `baseline_synthetic_glyph_retrieval` shows retrieval/composition with clean labels.",
         "- `baseline_extracted_glyph_retrieval` exposes the weakness of noisy segmentation-derived glyphs.",
         "- `proposed_script_renderer` is the current model used for demo-quality text-to-handwriting because it creates connected pen-stroke output without requiring filled writer templates.",
+        "- For OCR experiments, CER/WER are the primary recognition metrics; sequence similarity is kept only as a quick readability signal.",
+        "- Paper-inspired preprocessing modes are available through `image-to-pdf --preprocess ...` and `--ensemble-preprocess` for Tesseract-backed OCR.",
         "- The next real improvement is collecting writer-specific template glyphs or training a conditional glyph generator.",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

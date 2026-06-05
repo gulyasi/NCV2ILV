@@ -7,6 +7,9 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from .ocr_metrics import ocr_candidate_score
+from .ocr_preprocessing import ENSEMBLE_MODES, PREPROCESSING_MODES, preprocessed_image_path
+
 
 PAGE_SIZE = (2480, 3508)
 MARGIN = 160
@@ -51,6 +54,19 @@ def transcribe_with_tesseract(image_path: str, lang: str = "eng") -> str | None:
     return text or None
 
 
+def transcribe_with_tesseract_ensemble(image_path: str, lang: str = "eng") -> tuple[str | None, str | None]:
+    candidates: list[tuple[float, str, str]] = []
+    for mode in ENSEMBLE_MODES:
+        with preprocessed_image_path(image_path, mode=mode) as prepared:
+            text = transcribe_with_tesseract(prepared, lang=lang)
+        if text:
+            candidates.append((ocr_candidate_score(text), text, mode))
+    if not candidates:
+        return None, None
+    _, text, mode = max(candidates, key=lambda item: item[0])
+    return text, mode
+
+
 def transcribe_with_qwen(image_path: str) -> str:
     from .translate import QwenTranslator
 
@@ -62,9 +78,13 @@ def transcribe_image(
     method: str = "auto",
     metadata_path: str = "data/metadata.csv",
     tesseract_lang: str = "eng",
+    preprocess: str = "none",
+    ensemble_preprocess: bool = False,
 ) -> tuple[str, str]:
     if not Path(image_path).exists():
         raise FileNotFoundError(image_path)
+    if preprocess not in PREPROCESSING_MODES:
+        raise ValueError(f"Unknown preprocessing mode {preprocess!r}. Expected one of {PREPROCESSING_MODES}.")
 
     if method in {"auto", "metadata"}:
         text = transcribe_from_metadata(image_path, metadata_path)
@@ -74,16 +94,23 @@ def transcribe_image(
             raise RuntimeError(f"No metadata label found for {Path(image_path).name}")
 
     if method in {"auto", "tesseract"}:
-        text = transcribe_with_tesseract(image_path, lang=tesseract_lang)
+        if ensemble_preprocess:
+            text, selected_mode = transcribe_with_tesseract_ensemble(image_path, lang=tesseract_lang)
+            used_method = f"tesseract+preprocess-ensemble:{selected_mode}" if selected_mode else "tesseract+preprocess-ensemble"
+        else:
+            with preprocessed_image_path(image_path, mode=preprocess) as prepared:
+                text = transcribe_with_tesseract(prepared, lang=tesseract_lang)
+            used_method = "tesseract" if preprocess == "none" else f"tesseract+{preprocess}"
         if text:
-            return text, "tesseract"
+            return text, used_method
         if method == "tesseract":
             raise RuntimeError("Tesseract did not return text or is not installed")
 
     if method == "qwen":
-        text = transcribe_with_qwen(image_path)
+        with preprocessed_image_path(image_path, mode=preprocess) as prepared:
+            text = transcribe_with_qwen(prepared)
         if text:
-            return text, "qwen"
+            return text, "qwen" if preprocess == "none" else f"qwen+{preprocess}"
         raise RuntimeError("Qwen OCR did not return text")
 
     raise RuntimeError(
@@ -152,12 +179,16 @@ def image_to_pdf(
     method: str = "auto",
     metadata_path: str = "data/metadata.csv",
     tesseract_lang: str = "eng",
+    preprocess: str = "none",
+    ensemble_preprocess: bool = False,
 ) -> OCRResult:
     text, used_method = transcribe_image(
         image_path,
         method=method,
         metadata_path=metadata_path,
         tesseract_lang=tesseract_lang,
+        preprocess=preprocess,
+        ensemble_preprocess=ensemble_preprocess,
     )
     write_text_pdf(text, output_path, source_image=image_path, method=used_method)
     return OCRResult(text=text, method=used_method, output_path=output_path)
@@ -170,6 +201,8 @@ def main() -> None:
     parser.add_argument("--method", choices=["auto", "metadata", "tesseract", "qwen"], default="auto")
     parser.add_argument("--metadata", default="data/metadata.csv")
     parser.add_argument("--tesseract-lang", default="eng")
+    parser.add_argument("--preprocess", choices=PREPROCESSING_MODES, default="none")
+    parser.add_argument("--ensemble-preprocess", action="store_true")
     args = parser.parse_args()
     result = image_to_pdf(
         args.image,
@@ -177,6 +210,8 @@ def main() -> None:
         method=args.method,
         metadata_path=args.metadata,
         tesseract_lang=args.tesseract_lang,
+        preprocess=args.preprocess,
+        ensemble_preprocess=args.ensemble_preprocess,
     )
     print(f"Created {result.output_path}")
     print(f"Method: {result.method}")
