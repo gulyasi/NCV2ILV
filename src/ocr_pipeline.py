@@ -12,6 +12,7 @@ from .ocr_preprocessing import ENSEMBLE_MODES, PREPROCESSING_MODES, preprocessed
 
 
 PAGE_SIZE = (2480, 3508)
+_QWEN_TRANSLATOR = None
 MARGIN = 160
 LINE_HEIGHT = 96
 FONT_SIZE = 58
@@ -68,9 +69,12 @@ def transcribe_with_tesseract_ensemble(image_path: str, lang: str = "eng") -> tu
 
 
 def transcribe_with_qwen(image_path: str) -> str:
-    from .translate import QwenTranslator
+    global _QWEN_TRANSLATOR
+    if _QWEN_TRANSLATOR is None:
+        from .translate import QwenTranslator
 
-    return QwenTranslator().transcribe(image_path)
+        _QWEN_TRANSLATOR = QwenTranslator()
+    return _QWEN_TRANSLATOR.transcribe(image_path)
 
 
 def transcribe_image(
@@ -106,16 +110,21 @@ def transcribe_image(
         if method == "tesseract":
             raise RuntimeError("Tesseract did not return text or is not installed")
 
-    if method == "qwen":
-        with preprocessed_image_path(image_path, mode=preprocess) as prepared:
-            text = transcribe_with_qwen(prepared)
-        if text:
-            return text, "qwen" if preprocess == "none" else f"qwen+{preprocess}"
-        raise RuntimeError("Qwen OCR did not return text")
+    if method in {"auto", "qwen"}:
+        try:
+            with preprocessed_image_path(image_path, mode=preprocess) as prepared:
+                text = transcribe_with_qwen(prepared)
+        except Exception as exc:
+            if method == "qwen":
+                raise RuntimeError(f"Qwen OCR failed: {exc}") from exc
+        else:
+            if text:
+                return text, "qwen" if preprocess == "none" else f"qwen+{preprocess}"
+            if method == "qwen":
+                raise RuntimeError("Qwen OCR did not return text")
 
     raise RuntimeError(
-        "Could not transcribe image. Use a labeled dataset image, install tesseract, "
-        "or run with --method qwen if model downloads are available."
+        "Could not transcribe image. Metadata, Tesseract, and Qwen OCR were unavailable or returned no text."
     )
 
 

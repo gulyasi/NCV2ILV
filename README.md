@@ -1,174 +1,357 @@
-# Personal Handwriting System
+# Personal Handwriting Converter
 
-Prototype for converting handwritten image input into recognized text PDFs, plus text-to-handwriting rendering experiments. The default engine is a legible handwritten-style font renderer with per-character jitter so the demo works reliably today. The extracted-glyph engine is still available for the personal-handwriting research path, but it needs cleaner template data before it looks good.
+A research prototype for converting handwriting images into text and rendering typed text as handwriting-style PNG or PDF documents. The project includes a local browser GUI, a command-line interface, multiple rendering engines, OCR preprocessing, evaluation utilities, and a workflow for collecting writer-specific glyphs.
 
-## What Works
+## Project Status
 
-- Transcribes handwritten images into text PDFs.
-- Renders arbitrary text to a page-sized PNG or PDF.
-- Uses a readable default `font` engine with light per-character jitter.
-- Keeps the extracted-glyph renderer available with `--engine glyph`.
-- Reports missing characters and fallback substitutions.
-- Generates the proposal golden-set outputs.
-- Generates a printable template sheet for collecting clean personal handwriting glyphs.
-- Generates a clean synthetic glyph dataset for baseline/testing.
-- Generates baseline comparison PDFs and a metrics report.
-- Runs a complete demo workflow with one command.
+The system supports both directions:
 
-## Quick Start
+- **Handwriting to text:** transcribes a handwriting image and writes the recognized text into a PDF.
+- **Text to handwriting:** renders typed text using font, connected-script, direct-glyph, or hybrid handwriting engines.
 
+The current recommended rendering engine is `hybrid`. It keeps connected cursive word shapes while borrowing proportions, stroke pressure, ink texture, rough edges, and variation from extracted handwriting glyphs.
 
+> **Important model distinction:** the production text-to-handwriting pipeline is not a trained generative neural network. It is a composition system. The only locally trained model documented in this repository is a baseline glyph classifier, described in [What Was Trained](#what-was-trained).
 
-Run the full MVP demo:
+## Features
 
-```bash
-uv run python main.py demo
+- Local browser GUI with mode switching between both conversion directions.
+- OCR for new uploaded images through Qwen vision-language OCR.
+- Metadata lookup for bundled labeled samples.
+- Optional local Tesseract OCR with preprocessing and ensemble selection.
+- Text rendering to page-sized PNG or PDF files.
+- Four handwriting rendering engines.
+- Hybrid rendering that mixes connected cursive with learned glyph texture.
+- Printable handwriting template and fixed-grid glyph extraction.
+- Synthetic glyph generation for clean retrieval baselines.
+- Baseline comparison, golden-set generation, and evaluation reports.
+
+## Architecture
+
+```text
+Handwriting image
+      |
+      v
+Metadata lookup -> Tesseract OCR -> Qwen OCR
+      |                 |              |
+      +-----------------+--------------+
+                        |
+                        v
+                recognized text
+                        |
+                        v
+                 formatted text PDF
+
+Typed text
+    |
+    v
+font / script / glyph / hybrid renderer
+    |
+    v
+handwriting-style PNG or PDF
 ```
 
-This creates OCR outputs, handwriting outputs, baselines, golden-set PDFs, a handwriting template, and `outputs/demo/DEMO_REPORT.md`.
+### Handwriting-to-Text Pipeline
 
-Convert a handwriting image to a text PDF:
+The `auto` OCR method tries the following in order:
+
+1. **Metadata lookup** for filenames listed in `data/metadata.csv`.
+2. **Tesseract OCR** when the `tesseract` executable is installed.
+3. **Qwen OCR** using `Qwen/Qwen3.5-0.8B` for new images.
+
+Qwen is loaded through Hugging Face Transformers and cached in memory for the lifetime of the process. The first run may download model files and take longer. CUDA is used when available.
+
+Optional preprocessing modes are:
+
+- `none`
+- `grayscale`
+- `otsu`
+- `adaptive`
+- `denoise-deskew`
+- Tesseract preprocessing ensemble
+
+### Text-to-Handwriting Engines
+
+| Engine | Description | Trained? | Recommended use |
+|---|---|---:|---|
+| `font` | Legible oblique font rendered character-by-character with jitter. | No | Readable baseline |
+| `script` | Whole-word connected cursive using the bundled Dancing Script font. | No | Clean connected cursive |
+| `glyph` | Direct retrieval and composition of extracted or synthetic character images. | No | Writer-specific experiments and retrieval baseline |
+| `hybrid` | Connected cursive structure mixed with extracted-glyph proportions, ink texture, pressure variation, local warping, and dry-pen edges. | No | Best current handwriting-style output |
+
+The hybrid engine uses `data/glyph_library.json` as a learned-style reference library. It does not train a new neural generator; it samples statistics and textures from extracted glyph images during rendering.
+
+## What Was Trained
+
+### Baseline Glyph Classifier
+
+`src/train.py` defines and trains `SimpleBaselineCNN`, a character-classification baseline.
+
+Architecture:
+
+- Input: grayscale glyph image resized to `64 x 64`
+- Convolution: `1 -> 32` channels, ReLU, max pooling
+- Convolution: `32 -> 64` channels, ReLU, max pooling
+- Fully connected: `64 x 16 x 16 -> 128`
+- Output: one class per character code found in `data/glyphs`
+
+Training configuration:
+
+- Dataset: PNG glyph crops from `data/glyphs`
+- Label source: character code embedded in each filename
+- Split: 80% training, 20% validation allocation
+- Augmentation: resize and random affine transform
+- Optimizer: Adam
+- Learning rate: `0.001`
+- Loss: cross-entropy
+- Batch size: `16`
+- Epochs: `15`
+- Device: CUDA when available, otherwise CPU
+- Output checkpoint: `data/baseline_model.pth`
+
+Run training with:
 
 ```bash
-uv run python main.py image-to-pdf data/raw_handwriting/handwriting_0005.png -o outputs/transcription.pdf
+uv run python src/train.py
 ```
 
-The default `auto` OCR mode first uses `data/metadata.csv` when the image is from the bundled labeled dataset. For unknown images, it can use local Tesseract if installed, or Qwen with `--method qwen` when model downloads are available. Inspired by the attached HTR paper, OCR runs can also use targeted image preprocessing such as Otsu thresholding, adaptive thresholding, denoising, and deskewing.
+The classifier checkpoint is a research baseline. It is **not currently loaded by the GUI, OCR pipeline, or handwriting renderer**.
 
-Render one readable PDF with the default engine:
+### Pretrained Qwen OCR Model
+
+`Qwen/Qwen3.5-0.8B` is used for arbitrary-image OCR. It is a pretrained external model loaded at inference time; it is not trained or fine-tuned by this project.
+
+### Existing `handwriting_model.pth` Artifact
+
+`data/handwriting_model.pth` exists in the repository, but the current application does not load it and no matching training procedure is present in the current source tree. It should therefore be treated as an unintegrated experimental artifact, not as the model behind the generated handwriting.
+
+## Data
+
+### Bundled Handwriting Dataset
+
+`src/download_data.py` downloads the first 100 samples from the Hugging Face dataset `fhswf/german_handwriting` and writes:
+
+- Images to `data/raw_handwriting/handwriting_####.png`
+- Labels to `data/metadata.csv`
+
+Current repository data summary:
+
+| Artifact | Current size |
+|---|---:|
+| Metadata-labeled images | 100 |
+| Raw handwriting PNGs, including an additional long sample | 101 |
+| Extracted glyph PNGs | 7,492 |
+| Extracted glyph library characters | 68 |
+| Extracted glyph library variants | 7,492 |
+| Synthetic glyph library characters | 75 |
+| Synthetic glyph library variants | 600 |
+
+Download or recreate the labeled sample data with:
 
 ```bash
-uv run python main.py render "The quick brown fox jumps over the lazy dog." -o outputs/pangram.pdf
+uv run python src/download_data.py
 ```
 
-Generate the five golden-set PDFs with the default readable engine:
+### Extracted Glyph Library
+
+`src/segmentation.py` extracts connected components from the labeled handwriting images and assigns characters according to label order. The resulting files use names such as:
+
+```text
+data/glyphs/char_97_12_4.png
+```
+
+Here, `97` is the Unicode code point for `a`.
+
+This extraction method is noisy because connected handwriting can produce word fragments rather than clean isolated letters. `src/build_library.py` filters obvious failures by size and ink ratio, but it cannot correct incorrect character assignments.
+
+Build a filtered library with:
 
 ```bash
-uv run python main.py golden
+uv run python src/build_library.py \
+  --glyph-dir data/glyphs \
+  -o data/glyph_library_filtered.json
 ```
 
+### Synthetic Glyph Library
 
-Generate connected script-style handwriting directly:
+`src/synthetic_glyphs.py` creates clean character-level variants from a local oblique font. It adds small size, position, rotation, and blur variation while preserving a consistent baseline.
+
+Generate it with:
 
 ```bash
-uv run python main.py handwrite "hello this is a test" -o outputs/hello_handwrite.pdf
+uv run python main.py data synthetic --variants 12 --seed 1234
 ```
 
-This uses the connected script renderer by default, which looks more handwriting-like than the font renderer.
+### Collecting Personal Handwriting
 
-For glyph retrieval specifically:
+The most reliable personalization workflow uses a fixed-grid template rather than segmenting connected sentences.
 
-```bash
-uv run python main.py handwrite "hello this is a test" --engine glyph -o outputs/hello_glyph.pdf
-```
-
-Run the extracted-glyph engine, which uses the current dirty glyph library:
-
-```bash
-uv run python src/build_library.py -o data/glyph_library_filtered.json
-uv run python main.py render "this is a test." -o outputs/test_glyph.pdf --engine glyph --library data/glyph_library_filtered.json
-```
-
-
-Create a clean handwriting collection template:
+1. Create the printable template:
 
 ```bash
 uv run python main.py template make -o outputs/handwriting_template.pdf
 ```
 
-After filling the template by hand and scanning/photoing it, extract clean glyphs:
+2. Fill it by hand and scan or photograph it.
+
+3. Extract isolated glyphs:
 
 ```bash
-uv run python main.py template extract path/to/filled_template.png -o data/template_glyphs --prefix writer1
-uv run python src/build_library.py --glyph-dir data/template_glyphs -o data/writer1_glyph_library.json
-uv run python main.py render "hello from my handwriting" --engine glyph --library data/writer1_glyph_library.json -o outputs/writer1_demo.pdf
+uv run python main.py template extract path/to/filled_template.png \
+  -o data/template_glyphs \
+  --prefix writer1
 ```
 
-## Useful Options
-
-- `--engine font`: readable default renderer.
-- `handwrite`: shortcut for connected script-style text-to-handwriting output.
-- `--engine glyph`: use extracted glyph crops from a glyph JSON.
-- `--writer writer1`: filter glyphs to filenames containing a writer token.
-- `--library path/to/glyph_library.json`: use another glyph library.
-- `--font path/to/font.ttf`: use a custom font for the default engine.
-- `--no-jitter`: disable random rotation.
-- `--seed 123`: make sampling repeatable.
-
-
-
-
-
-## OCR / Image To PDF
-
-The main product command is:
+4. Build the writer library:
 
 ```bash
-uv run python main.py image-to-pdf path/to/handwritten_image.png -o outputs/transcription.pdf
+uv run python src/build_library.py \
+  --glyph-dir data/template_glyphs \
+  -o data/writer1_glyph_library.json
 ```
 
-OCR methods:
-
-- `--method auto`: use metadata for bundled dataset images, then try local Tesseract.
-- `--method metadata`: only use labels from `data/metadata.csv`; useful for validating the pipeline on known data.
-- `--method tesseract`: use a local Tesseract install if available.
-- `--method qwen`: use the existing Qwen vision-language OCR wrapper; this may require model downloads and enough memory.
-- `--preprocess otsu|adaptive|denoise-deskew`: prepare unknown images before Tesseract or Qwen OCR.
-- `--ensemble-preprocess`: run Tesseract across several preprocessing variants and keep the most plausible transcript.
-
-Example with preprocessing for an unknown image:
+5. Render with the writer library:
 
 ```bash
-uv run python main.py image-to-pdf path/to/handwritten_image.png --method tesseract --preprocess denoise-deskew -o outputs/preprocessed_transcription.pdf
-uv run python main.py image-to-pdf path/to/handwritten_image.png --method tesseract --ensemble-preprocess -o outputs/ensemble_transcription.pdf
+uv run python main.py render "A personal handwriting sample" \
+  --engine hybrid \
+  --library data/writer1_glyph_library.json \
+  -o outputs/writer1_sample.png
 ```
 
-Example with a known bundled image:
+## Installation
+
+### Requirements
+
+- Python `3.12` or newer
+- `uv` package manager
+- CUDA-capable GPU recommended for Qwen OCR
+- Optional: Tesseract for lightweight local OCR
+
+Install the Python environment:
 
 ```bash
-uv run python main.py image-to-pdf data/raw_handwriting/handwriting_0005.png -o outputs/sample_transcription.pdf --method metadata
+uv sync
 ```
 
-## Baseline Models
-
-For the course report/demo, use explicit baselines rather than jumping directly to a large vision-language model. A Flamingo-style model is good for image-text understanding and few-shot multimodal reasoning, but it is not a natural baseline for generating a specific writer's handwriting glyphs. For this project, the defensible baselines are:
-
-1. `font_jitter`: readable handwritten-style font rendering with character jitter. This is the simplest rendering baseline.
-2. `synthetic_glyph_retrieval`: clean character-level glyph retrieval from generated synthetic glyphs with preserved baseline zones. This tests whether the composition engine works when labels and alignment are correct.
-3. `extracted_glyph_retrieval`: retrieval from the current extracted dataset glyphs. This shows how much the noisy segmentation/labeling hurts output quality.
-
-Run all implemented baselines:
+Optional Tesseract installation on Ubuntu/Debian:
 
 ```bash
-uv run python main.py baseline
+sudo apt-get update
+sudo apt-get install tesseract-ocr tesseract-ocr-eng tesseract-ocr-deu
 ```
 
-This writes baseline PDFs plus:
+The first Qwen OCR request may download model files from Hugging Face. Set `HF_TOKEN` if authenticated downloads or higher rate limits are required.
 
-```text
-outputs/baselines/baseline_report.md
-outputs/baselines/baseline_report.json
-```
+## Quick Start
 
-A realistic stretch model would be a conditional glyph generator, not Flamingo: for example, a small pix2pix/diffusion-style model conditioned on `(character label, writer/style embedding)`. Keep that as a stretch goal after the retrieval baselines work.
+### Browser GUI
 
-If the synthetic glyph baseline still looks poor, regenerate it before rendering:
+Start the local GUI:
 
 ```bash
-uv run python main.py data synthetic --variants 8 --seed 7
-uv run python main.py render "The quick brown fox jumps over the lazy dog." --engine glyph --library data/synthetic_glyph_library.json -o outputs/synthetic_pangram.pdf --seed 7
+uv run python main.py gui
 ```
 
+The command prefers `http://127.0.0.1:8000`. If that port is occupied, it selects another free local port and prints the actual URL. Press `Ctrl+C` to stop the server.
 
-## Evaluation Report
+#### Text to Handwriting
 
-Run the full benchmark/report command:
+1. Select **Text to Handwriting**.
+2. Enter text.
+3. Select an engine. `hybrid (font + learned writing)` is the recommended default.
+4. Select a glyph library. Use `data/glyph_library.json` for the bundled extracted style.
+5. Choose a PNG or PDF output path.
+6. Press **Generate Handwriting**.
+
+#### Handwriting to Text
+
+1. Select **Handwriting to Text**.
+2. Upload an image.
+3. Leave OCR method set to `auto` for normal use.
+4. Optionally select preprocessing.
+5. Choose an output PDF path.
+6. Press **Recognize Handwriting**.
+
+For a new image, `auto` falls through to Qwen when metadata and Tesseract are unavailable. A manual transcription field is also available as a fallback for producing the formatted PDF without OCR.
+
+### Recommended CLI Commands
+
+Render realistic hybrid handwriting:
+
+```bash
+uv run python main.py render "Food was great!" \
+  --engine hybrid \
+  --library data/glyph_library.json \
+  --seed 7 \
+  -o outputs/hybrid_handwriting.png
+```
+
+Render clean connected cursive:
+
+```bash
+uv run python main.py handwrite "This is connected cursive." \
+  --engine script \
+  -o outputs/script_handwriting.pdf
+```
+
+Transcribe a new image using automatic OCR selection:
+
+```bash
+uv run python main.py image-to-pdf path/to/new_image.png \
+  --method auto \
+  -o outputs/transcription.pdf
+```
+
+Transcribe explicitly with Qwen:
+
+```bash
+uv run python main.py image-to-pdf path/to/new_image.png \
+  --method qwen \
+  --preprocess denoise-deskew \
+  -o outputs/qwen_transcription.pdf
+```
+
+Use Tesseract preprocessing ensemble:
+
+```bash
+uv run python main.py image-to-pdf path/to/new_image.png \
+  --method tesseract \
+  --ensemble-preprocess \
+  -o outputs/tesseract_transcription.pdf
+```
+
+## Command Reference
+
+| Command | Purpose |
+|---|---|
+| `gui` | Start the local browser interface |
+| `image-to-pdf` | Transcribe a handwriting image and create a text PDF |
+| `render` | Render text using any handwriting engine |
+| `handwrite` | Shortcut for script/glyph/hybrid handwriting output |
+| `template make` | Create a printable personal-handwriting template |
+| `template extract` | Extract isolated glyphs from a filled template |
+| `data synthetic` | Generate a clean synthetic glyph library |
+| `baseline` | Generate baseline outputs and comparison reports |
+| `golden` | Render the five fixed golden-set prompts |
+| `evaluate` | Generate rendering and OCR benchmark reports |
+| `demo` | Run the implemented workflows end to end |
+
+Show all CLI options:
+
+```bash
+uv run python main.py --help
+```
+
+## Evaluation
+
+Run the full evaluation:
 
 ```bash
 uv run python main.py evaluate
 ```
 
-This writes:
+Outputs are written to:
 
 ```text
 outputs/evaluation/EVALUATION_REPORT.md
@@ -177,72 +360,146 @@ outputs/evaluation/render/
 outputs/evaluation/ocr/
 ```
 
-The report compares three baselines against the current proposed renderer:
+### Rendering Evaluation
 
-- `baseline_font_jitter`: readable handwritten-font baseline.
-- `baseline_synthetic_glyph_retrieval`: clean glyph retrieval baseline.
-- `baseline_extracted_glyph_retrieval`: noisy dataset-extracted glyph baseline.
-- `proposed_script_renderer`: connected pen-stroke renderer used as the current project model.
+The benchmark measures:
 
-The OCR section validates image-to-text-PDF output on bundled labeled dataset samples using metadata labels. It reports character error rate (CER), word error rate (WER), and sequence similarity. With the default metadata method this is an oracle pipeline validation rather than a claim that arbitrary handwriting OCR is solved; use `image-to-pdf --method tesseract --preprocess ...` or `--ensemble-preprocess` for non-oracle OCR experiments.
+- Character coverage
+- Missing/fallback character count
+- Line count
+- Page overflow
 
-## Data Strategy
+The current benchmark compares:
 
-The old German line-image dataset is useful for OCR experiments, but it is a poor source for glyph composition because connected words are hard to split into correctly labeled characters. Prefer these sources, in this order:
+- Font jitter baseline
+- Synthetic glyph retrieval baseline
+- Extracted glyph retrieval baseline
+- Connected script renderer
 
-1. Filled project template sheets from consenting writers. This is the best data for personal handwriting because each cell has a known character label.
-2. Synthetic clean glyphs generated from a consistent local font with preserved baseline zones. This is useful for testing, baseline training, and proving the glyph engine works with correctly labeled and aligned character crops.
-3. Public isolated-character datasets such as EMNIST for classifier pretraining. These are better for recognition than for personal style generation.
-4. Full line/word datasets such as IAM only after you have reliable annotation and segmentation. They should not be the MVP glyph source.
+The existing report records 100% coverage for font, synthetic glyph, and script rendering across the five golden prompts, and 92.8% average coverage for the noisy extracted-glyph baseline. The evaluation script currently predates the hybrid engine and does not yet include a perceptual realism metric.
 
-Generate a clean synthetic glyph baseline:
+### OCR Evaluation
+
+The evaluation computes:
+
+- Character error rate (CER)
+- Word error rate (WER)
+- Sequence similarity
+- Exact match
+
+The bundled evaluation uses metadata labels on known samples. This validates the image-to-PDF pipeline but is an oracle test, not evidence of arbitrary-image OCR accuracy. Use `src/qwen_benchmark.py` or run Qwen/Tesseract against a separately labeled test set to evaluate real OCR generalization.
+
+Run the Qwen sample benchmark:
 
 ```bash
-uv run python main.py data synthetic --variants 12
-uv run python main.py render "The quick brown fox jumps over the lazy dog." --engine glyph --library data/synthetic_glyph_library.json -o outputs/synthetic_pangram.pdf
+uv run python src/qwen_benchmark.py
 ```
 
-## Improving Output Quality
+## Demo
 
-If the generated handwriting looks like fragments of words or random marks, the glyph library is polluted. Rebuild a filtered library first:
+Run all MVP workflows:
 
 ```bash
-uv run python src/build_library.py -o data/glyph_library_filtered.json
-uv run python main.py render "The quick brown fox jumps over the lazy dog." -o outputs/pangram_filtered.pdf --library data/glyph_library_filtered.json
+uv run python main.py demo
 ```
 
-This removes obvious bad crops, but the real fix is collecting isolated template sheets where each character is known in advance. The current dataset-derived glyphs are labeled by connected-component order, so connected handwriting and word fragments can be assigned to the wrong character.
+The demo generates OCR PDFs, script and glyph renderings, baseline comparisons, golden-set PDFs, a printable template, and:
 
-## Current Limitations
+```text
+outputs/demo/DEMO_REPORT.md
+outputs/demo/demo_summary.json
+```
 
-- The default `font` engine is legible but not personal handwriting.
-- The `glyph` engine can represent personal handwriting, but only after collecting clean template glyphs.
-- The original dataset-derived glyph library is polluted by word fragments and mislabeled crops.
-- Layout is functional but simple: it does word wrapping and explicit line breaks, not paragraph-level typography.
-- OCR/transcription experiments include preprocessing and CER/WER metrics, but they are not required for rendering text into handwriting.
-
-
-## Project Layout
+## Repository Layout
 
 ```text
 .
-├── main.py                 # CLI entry point
-├── pyproject.toml          # Python project metadata and dependencies
-├── src/                    # Application and research modules
-├── data/                   # Current dataset/model artifacts
-└── data_samples/           # Small sample input assets
+├── assets/fonts/                 # Bundled cursive font and license
+├── data/
+│   ├── raw_handwriting/          # Labeled handwriting images
+│   ├── glyphs/                   # Extracted character crops
+│   ├── glyph_library.json        # Extracted glyph index
+│   ├── synthetic_glyph_library.json
+│   ├── metadata.csv              # Image-to-text labels
+│   ├── baseline_model.pth        # Trained glyph-classifier baseline
+│   └── handwriting_model.pth     # Unintegrated experimental artifact
+├── outputs/                      # Generated reports, PDFs, and PNGs
+├── src/
+│   ├── composer.py               # Font, script, glyph, and hybrid renderers
+│   ├── gui.py                    # Local browser GUI and API
+│   ├── ocr_pipeline.py           # OCR selection and text-PDF generation
+│   ├── ocr_preprocessing.py      # Thresholding, denoising, and deskewing
+│   ├── translate.py              # Qwen OCR wrapper
+│   ├── train.py                  # Baseline glyph-classifier training
+│   ├── segmentation.py           # Dataset-image glyph extraction
+│   ├── template_tools.py         # Personal template generation/extraction
+│   ├── synthetic_glyphs.py       # Synthetic glyph generation
+│   ├── evaluation.py             # Benchmark runner
+│   └── demo.py                   # End-to-end demo runner
+├── main.py                       # Main CLI entry point
+├── pyproject.toml                # Project metadata and dependencies
+└── uv.lock                       # Locked dependency versions
 ```
 
-## Main Files
+## Current Limitations
 
-- `main.py`: command-line entry point.
-- `src/demo.py`: complete MVP demo runner.
-- `src/ocr_pipeline.py`: handwritten image transcription and text-PDF output.
-- `src/composer.py`: text-to-page renderer and coverage reporting.
-- `src/baselines.py`: baseline rendering comparison and report generation.
-- `src/golden_set.py`: golden-set PDF generation.
-- `src/template_tools.py`: printable template creation and fixed-grid glyph extraction.
-- `src/synthetic_glyphs.py`: synthetic clean glyph dataset generation.
-- `src/build_library.py`: builds filtered glyph-library JSON files from extracted glyph crops.
-- `src/download_data.py`: downloads the sample handwriting dataset and metadata.
-- `src/segmentation.py`: older heuristic glyph extraction script.
+- The hybrid renderer uses extracted glyphs as style references; it is not a learned sequence-to-image generator.
+- The extracted glyph library contains noisy or incorrectly labeled crops from connected handwriting.
+- The bundled style library combines multiple samples and is not guaranteed to represent one consistent writer.
+- Real personalization requires a clean filled template from the target writer.
+- Qwen OCR accuracy depends on image quality, language, model behavior, and available compute.
+- Tesseract must be installed separately.
+- The current page renderer creates one page and reports overflow rather than automatically creating additional pages.
+- Existing rendering evaluation measures coverage and layout, not human-rated realism.
+
+## Troubleshooting
+
+### A new image cannot be transcribed
+
+Use `auto` or `qwen` rather than `metadata`:
+
+```bash
+uv run python main.py image-to-pdf path/to/image.png --method auto
+```
+
+For Qwen, confirm that model downloads are allowed and sufficient memory is available. For Tesseract, confirm installation with:
+
+```bash
+tesseract --version
+```
+
+### Glyph output contains fragments or incorrect characters
+
+The extracted library is noisy. Build a filtered library or collect a fixed-grid writer template:
+
+```bash
+uv run python src/build_library.py -o data/glyph_library_filtered.json
+```
+
+### Hybrid output is too clean or too rough
+
+- Use `script` for cleaner connected cursive.
+- Use `hybrid` for rougher learned texture.
+- Use `--no-jitter` for deterministic placement without baseline and spacing variation.
+- Use `--seed` to reproduce a particular result.
+
+### Port 8000 is occupied
+
+The GUI automatically selects another free port. Use the URL printed in the terminal.
+
+## Reproducibility
+
+Use explicit seeds for repeatable rendering and data generation:
+
+```bash
+uv run python main.py render "Repeatable sample" --engine hybrid --seed 7 -o outputs/repeatable.png
+uv run python main.py data synthetic --variants 12 --seed 1234
+```
+
+The hybrid engine randomly samples learned glyph references, but the same text, library, options, and seed produce repeatable output.
+
+## License and Attribution
+
+Project code is covered by the repository `LICENSE` file.
+
+The bundled Dancing Script font is stored in `assets/fonts/DancingScript.ttf` and is distributed under the SIL Open Font License. Its license text is included at `assets/fonts/DancingScript-OFL.txt`.

@@ -24,11 +24,14 @@ def main() -> None:
             "  uv run python main.py data synthetic\n"
             "  uv run python main.py baseline\n"
             "  uv run python main.py evaluate\n"
+            "  uv run python main.py gui\n"
             "  uv run python main.py image-to-pdf data/raw_handwriting/handwriting_0005.png"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest="command")
+
+    subparsers.add_parser("gui", help="Launch the desktop handwriting converter")
 
 
 
@@ -51,7 +54,7 @@ def main() -> None:
     handwrite_parser = subparsers.add_parser("handwrite", help="Render text using glyph-based handwriting")
     handwrite_parser.add_argument("text")
     handwrite_parser.add_argument("-o", "--output", default="outputs/handwriting.pdf")
-    handwrite_parser.add_argument("--engine", choices=["script", "glyph"], default="script")
+    handwrite_parser.add_argument("--engine", choices=["script", "glyph", "hybrid"], default="script")
     handwrite_parser.add_argument("--library", default="data/synthetic_glyph_library.json")
     handwrite_parser.add_argument("--variants", type=int, default=8)
     handwrite_parser.add_argument("--seed", type=int, default=7)
@@ -60,7 +63,7 @@ def main() -> None:
     render_parser = subparsers.add_parser("render", help="Render one text string to PNG or PDF")
     render_parser.add_argument("text")
     render_parser.add_argument("-o", "--output", default="outputs/handwritten_result.pdf")
-    render_parser.add_argument("--engine", choices=["font", "glyph", "script"], default="font")
+    render_parser.add_argument("--engine", choices=["font", "glyph", "script", "hybrid"], default="font")
     render_parser.add_argument("--library", default="data/glyph_library.json")
     render_parser.add_argument("--writer", default=None)
     render_parser.add_argument("--font", default=None)
@@ -69,7 +72,7 @@ def main() -> None:
 
     golden_parser = subparsers.add_parser("golden", help="Generate the five proposal golden-set PDFs")
     golden_parser.add_argument("-o", "--output-dir", default="outputs/golden_set")
-    golden_parser.add_argument("--engine", choices=["font", "glyph", "script"], default="font")
+    golden_parser.add_argument("--engine", choices=["font", "glyph", "script", "hybrid"], default="font")
     golden_parser.add_argument("--library", default="data/glyph_library.json")
     golden_parser.add_argument("--writer", default=None)
     golden_parser.add_argument("--font", default=None)
@@ -112,7 +115,11 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if args.command == "evaluate":
+    if args.command == "gui":
+        from src.gui import run_gui
+
+        run_gui()
+    elif args.command == "evaluate":
         run_evaluation(args.output_dir)
     elif args.command == "demo":
         run_demo(args.output_dir)

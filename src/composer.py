@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
-from PIL import Image, ImageChops, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 
 PAGE_SIZE = (2480, 3508)
@@ -29,6 +29,10 @@ SCRIPT_WORD_SPACE = 76
 SCRIPT_LETTER_WIDTH = 64
 SCRIPT_LETTER_HEIGHT = 92
 SCRIPT_BASELINE = 92
+SCRIPT_FONT_PATH = "assets/fonts/DancingScript.ttf"
+SCRIPT_FONT_SIZE = 104
+SCRIPT_WORD_GAP = 58
+SCRIPT_FONT_LINE_HEIGHT = 168
 
 
 @dataclass
@@ -443,34 +447,184 @@ def script_tile(char: str, rng: random.Random) -> tuple[Image.Image, int]:
     return tile, advance
 
 
-def compose_script(text: str, output_name: str = "handwritten_result.pdf", seed: int | None = None, jitter: bool = True) -> ComposeReport:
-    rng = random.Random(seed)
-    text = normalize_text(text)
-    page = Image.new("L", PAGE_SIZE, 255)
-    x, baseline_y = MARGIN_X, MARGIN_Y + SCRIPT_BASELINE
-    report = ComposeReport(output_path=output_name, engine="script")
+def load_script_font(size: int = SCRIPT_FONT_SIZE) -> ImageFont.FreeTypeFont:
+    try:
+        return ImageFont.truetype(SCRIPT_FONT_PATH, size)
+    except OSError:
+        return load_font(None, size)
 
+
+def render_script_word(word: str, font: ImageFont.ImageFont, rng: random.Random, jitter: bool) -> Image.Image:
+    bbox = font.getbbox(word, stroke_width=1)
+    width = max(1, bbox[2] - bbox[0] + 36)
+    height = max(1, bbox[3] - bbox[1] + 36)
+    tile = Image.new("L", (width, height), 255)
+    draw = ImageDraw.Draw(tile)
+    draw.text((18 - bbox[0], 18 - bbox[1]), word, font=font, fill=0, stroke_width=1, stroke_fill=0)
+    if jitter:
+        tile = tile.rotate(rng.uniform(-0.45, 0.45), expand=True, fillcolor=255)
+    return tile
+
+
+def learned_style_samples(word: str, library: dict[str, list[str]], rng: random.Random, limit: int = 4) -> list[Image.Image]:
+    candidates = [path for char in word for path in library.get(char, [])]
+    rng.shuffle(candidates)
+    samples: list[Image.Image] = []
+    for path in candidates:
+        try:
+            glyph = Image.open(path).convert("L")
+            if glyph.resize((1, 1)).getpixel((0, 0)) < 128:
+                glyph = ImageChops.invert(glyph)
+            ink = ImageChops.invert(glyph)
+            bbox = ink.getbbox()
+            if bbox:
+                samples.append(ink.crop(bbox))
+            if len(samples) >= limit:
+                break
+        except OSError:
+            continue
+    return samples
+
+
+def roughen_ink(ink: Image.Image, rng: random.Random) -> Image.Image:
+    width, height = ink.size
+    warped = Image.new("L", ink.size, 0)
+
+    # Shift narrow vertical bands independently to break the perfect font
+    # silhouette while preserving connected strokes.
+    band_width = max(10, width // 24)
+    x = 0
+    previous_shift = rng.randint(-2, 2)
+    while x < width:
+        next_shift = max(-4, min(4, previous_shift + rng.choice((-1, 0, 0, 1))))
+        band = ink.crop((x, 0, min(width, x + band_width + 3), height))
+        warped.paste(band, (x, next_shift))
+        previous_shift = next_shift
+        x += band_width
+
+    # Real pen pressure changes across a word. Alternate slight dilation and
+    # erosion in broad sections instead of applying one uniform stroke width.
+    pressure = Image.new("L", warped.size, 0)
+    section_width = max(28, width // 7)
+    x = 0
+    while x < width:
+        section = warped.crop((x, 0, min(width, x + section_width + 4), height))
+        choice = rng.random()
+        if choice < 0.38:
+            section = section.filter(ImageFilter.MaxFilter(3))
+        elif choice < 0.58:
+            section = section.filter(ImageFilter.MinFilter(3))
+        pressure.paste(section, (x, 0), section)
+        x += section_width
+
+    # Remove a sparse set of edge pixels, creating dry-pen imperfections
+    # without punching large holes through the writing.
+    edge = ImageChops.difference(pressure, pressure.filter(ImageFilter.MinFilter(3)))
+    noise = Image.frombytes("L", pressure.size, rng.randbytes(width * height))
+    sparse_noise = noise.point(lambda value: 255 if value > 236 else 0)
+    edge_mask = ImageChops.multiply(edge.point(lambda value: 255 if value > 12 else 0), sparse_noise)
+    pressure.paste(0, mask=edge_mask)
+    return pressure.filter(ImageFilter.GaussianBlur(0.28))
+
+
+def apply_learned_style(tile: Image.Image, word: str, library: dict[str, list[str]], rng: random.Random) -> Image.Image:
+    samples = learned_style_samples(word, library, rng)
+    if not samples:
+        return tile
+
+    densities = []
+    width_ratios = []
+    for sample in samples:
+        ink_pixels = sum(sample.histogram()[32:])
+        densities.append(ink_pixels / max(1, sample.width * sample.height))
+        width_ratios.append(sample.width / max(1, sample.height))
+
+    density = sum(densities) / len(densities)
+    width_ratio = sum(width_ratios) / len(width_ratios)
+    x_scale = min(1.08, max(0.94, 0.98 + (width_ratio - 0.55) * 0.08))
+    tile = tile.resize((max(1, int(tile.width * x_scale)), tile.height), Image.Resampling.BICUBIC)
+
+    ink = ImageChops.invert(tile)
+    if density > 0.34:
+        ink = ink.filter(ImageFilter.MaxFilter(3))
+    elif density < 0.20:
+        ink = ink.filter(ImageFilter.MinFilter(3))
+
+    texture = Image.new("L", ink.size, 0)
+    tx = 0
+    while tx < texture.width:
+        sample = rng.choice(samples)
+        target_h = max(12, int(texture.height * rng.uniform(0.45, 0.9)))
+        target_w = max(8, int(sample.width * target_h / max(1, sample.height)))
+        sample = sample.resize((target_w, target_h), Image.Resampling.BILINEAR)
+        y = rng.randint(0, max(0, texture.height - target_h))
+        texture.paste(sample, (tx, y), sample)
+        tx += max(6, int(target_w * rng.uniform(0.6, 1.0)))
+    texture = texture.filter(ImageFilter.GaussianBlur(2.2))
+
+    # Preserve the font's connected structure while borrowing uneven ink flow
+    # from real glyph crops. A small gray floor prevents artificial holes.
+    modulation = texture.point(lambda value: 205 + value // 5)
+    ink = ImageChops.multiply(ink, modulation)
+    ink = roughen_ink(ink, rng)
+    return ImageChops.invert(ink)
+
+
+def script_tokens(text: str) -> Iterable[str]:
+    token = ""
     for char in text:
-        if char == "\n":
+        if char in {" ", "\n"}:
+            if token:
+                yield token
+                token = ""
+            yield char
+        else:
+            token += char
+    if token:
+        yield token
+
+
+def compose_script(
+    text: str,
+    output_name: str = "handwritten_result.pdf",
+    seed: int | None = None,
+    jitter: bool = True,
+    library_path: str | None = None,
+    engine_name: str = "script",
+) -> ComposeReport:
+    rng = random.Random(seed)
+    font = load_script_font()
+    library = load_library(library_path) if library_path else None
+    page = Image.new("L", PAGE_SIZE, 255)
+    x, y = MARGIN_X, MARGIN_Y
+    report = ComposeReport(output_path=output_name, engine=engine_name)
+
+    for token in script_tokens(normalize_text(text)):
+        if token == "\n":
             x = MARGIN_X
-            baseline_y += SCRIPT_LINE_HEIGHT
+            y += SCRIPT_FONT_LINE_HEIGHT
             report.lines += 1
             continue
-        if char == " ":
-            x += SCRIPT_WORD_SPACE + rng.randint(-8, 8)
+        if token == " ":
+            x += SCRIPT_WORD_GAP + (rng.randint(-4, 6) if jitter else 0)
             continue
-        tile, advance = script_tile(char, rng)
-        if x + tile.width > MAX_X:
+
+        tile = render_script_word(token, font, rng, jitter)
+        if library:
+            tile = apply_learned_style(tile, token, library, rng)
+        if x > MARGIN_X and x + tile.width > MAX_X:
             x = MARGIN_X
-            baseline_y += SCRIPT_LINE_HEIGHT
+            y += SCRIPT_FONT_LINE_HEIGHT
             report.lines += 1
-        if baseline_y > MAX_Y:
+        if y + tile.height > MAX_Y:
             report.overflow = True
             continue
-        mask = tile.point(lambda p: 255 if p < 230 else 0)
-        page.paste(Image.new("L", tile.size, 0), (x, baseline_y - int(tile.height * 0.78)), mask)
-        x += advance
-        report.rendered += 1
+
+        y_offset = rng.randint(-7, 7) if jitter and library else (rng.randint(-3, 3) if jitter else 0)
+        mask = tile.point(lambda value: 255 if value < 230 else 0)
+        page.paste(Image.new("L", tile.size, 0), (x, y + y_offset), mask)
+        x += tile.width - 14 + (rng.randint(-5, 5) if jitter and library else 0)
+        report.rendered += len(token)
 
     save_page(page, output_name)
     return report
@@ -489,6 +643,8 @@ def compose(
         return compose_glyph(text, output_name, library_path, writer, seed, jitter)
     if engine == "script":
         return compose_script(text, output_name, seed=seed, jitter=jitter)
+    if engine == "hybrid":
+        return compose_script(text, output_name, seed=seed, jitter=jitter, library_path=library_path, engine_name="hybrid")
     if engine == "font":
         return compose_font(text, output_name, font_path=font_path, seed=seed, jitter=jitter)
     raise ValueError(f"Unknown engine: {engine}")
@@ -509,7 +665,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Render text using a legible font engine or the extracted glyph library.")
     parser.add_argument("text", nargs="?", default="this is a test.")
     parser.add_argument("-o", "--output", default="handwritten_result.pdf")
-    parser.add_argument("--engine", choices=["font", "glyph", "script"], default="script")
+    parser.add_argument("--engine", choices=["font", "glyph", "script", "hybrid"], default="script")
     parser.add_argument("--library", default="data/glyph_library.json")
     parser.add_argument("--writer", default=None, help="Optional writer token to filter glyph filenames, e.g. writer1")
     parser.add_argument("--font", default=None, help="Optional .ttf/.otf path for the font engine")
