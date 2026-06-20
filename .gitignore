@@ -27,3 +27,4 @@ data/blank_template_extract_test/
 # Regenerable synthetic glyph data
 data/synthetic_glyphs/
 data/synthetic_glyph_library.json
+docs/presentation
