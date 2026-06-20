@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import json
-import shutil
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -10,7 +9,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
 from .composer import compose, format_report
-from .ocr_pipeline import image_to_pdf, load_metadata, write_text_pdf
+from .ocr_pipeline import image_to_pdf, write_text_pdf
 
 
 PAGE = r'''<!doctype html>
@@ -22,7 +21,7 @@ PAGE = r'''<!doctype html>
 <div class="modes"><button id="textBtn" class="active">Text to Handwriting</button><button id="ocrBtn">Handwriting to Text</button></div>
 <div class="grid"><section class="card">
 <form id="textForm" class="form active"><h2>Text to Handwriting</h2><label>Enter text</label><textarea id="sourceText">The quick brown fox jumps over the lazy dog.</textarea><div class="row"><div><label>Engine</label><select id="engine"><option value="hybrid">hybrid (font + learned writing)</option><option>script</option><option>font</option><option>glyph</option></select></div><div><label>Random seed</label><input id="seed" value="7"></div></div><label class="check"><input id="jitter" type="checkbox" checked> Character jitter</label><label>Glyph library</label><input id="library" value="data/glyph_library.json"><label>Output PNG or PDF</label><input id="renderOutput" value="outputs/gui/handwriting.png"><button id="renderButton" type="submit" class="primary action">Generate Handwriting</button></form>
-<form id="ocrForm" class="form"><h2>Handwriting to Text</h2><label>Handwriting image</label><input id="image" type="file" accept="image/*" required><div class="row"><div><label>OCR method</label><select id="method"><option>auto</option><option>metadata</option><option>tesseract</option><option>qwen</option></select></div><div><label>Preprocessing</label><select id="preprocess"><option>none</option><option>grayscale</option><option>otsu</option><option>adaptive</option><option>denoise-deskew</option></select></div></div><label class="check"><input id="ensemble" type="checkbox"> Try preprocessing ensemble (Tesseract)</label><label>Metadata CSV</label><input id="metadata" value="data/metadata.csv"><label>Tesseract language</label><input id="language" value="eng"><label>Manual transcription (optional fallback)</label><textarea id="manualText" placeholder="Enter the text here when no OCR engine is installed."></textarea><label>Output PDF</label><input id="ocrOutput" value="outputs/gui/transcription.pdf"><button id="ocrButton" type="submit" class="primary action">Recognize Handwriting</button></form>
+<form id="ocrForm" class="form"><h2>Handwriting to Text</h2><label>Handwriting image</label><input id="image" type="file" accept="image/*" required><label>Preprocessing</label><select id="preprocess"><option>none</option><option>grayscale</option><option>otsu</option><option>adaptive</option><option>denoise-deskew</option></select><label>Manual transcription (optional fallback)</label><textarea id="manualText" placeholder="Enter the text here if Qwen OCR is unavailable."></textarea><label>Output PDF</label><input id="ocrOutput" value="outputs/gui/transcription.pdf"><button id="ocrButton" type="submit" class="primary action">Recognize Handwriting</button></form>
 </section><aside class="card"><h2>Preview and Result</h2><div id="preview" class="preview">Your image preview will appear here.</div><h3>Recognized text / render report</h3><pre id="result"></pre><a id="open" class="open primary" target="_blank">Open Output</a></aside></div><div id="status" class="status">Ready</div></main>
 <script>
 const byId = (id) => document.getElementById(id);
@@ -80,7 +79,7 @@ function readFile(file) {
 }
 
 fetch("/api/status").then((response) => response.json()).then((data) => {
-  if (!data.tesseract) byId("status").textContent = "Ready. New images use GPU-backed Qwen OCR; the first run may take longer while the model loads.";
+  byId("status").textContent = "Ready. Images use Qwen OCR; the first run may take longer while the model loads.";
 });
 
 byId("textBtn").addEventListener("click", () => setMode("text"));
@@ -125,11 +124,7 @@ byId("ocrForm").addEventListener("submit", async (event) => {
     const data = await postJSON("/api/ocr", {
       name: file.name,
       image: await readFile(file),
-      method: byId("method").value,
       preprocess: byId("preprocess").value,
-      ensemble: byId("ensemble").checked,
-      metadata: byId("metadata").value,
-      language: byId("language").value,
       output: byId("ocrOutput").value,
       manual_text: byId("manualText").value,
     });
@@ -178,8 +173,7 @@ class GUIHandler(BaseHTTPRequestHandler):
             self._send(200, PAGE.encode(), "text/html; charset=utf-8")
             return
         if parsed.path == "/api/status":
-            metadata = load_metadata()
-            self._json({"ok": True, "tesseract": shutil.which("tesseract") is not None, "metadata_images": len(metadata)})
+            self._json({"ok": True, "ocr": "qwen"})
             return
         if parsed.path == "/file":
             try:
@@ -222,15 +216,11 @@ class GUIHandler(BaseHTTPRequestHandler):
         upload.write_bytes(base64.b64decode(encoded))
         output = self._path(data.get("output") or "outputs/gui/transcription.pdf")
         manual_text = str(data.get("manual_text", "")).strip()
-        method = data.get("method", "auto")
-        metadata_path = str(self._path(data.get("metadata") or "data/metadata.csv"))
         if manual_text:
             write_text_pdf(manual_text, str(output), source_image=str(upload), method="manual transcription")
             self._json({"ok": True, "status": f"Manual transcription saved: {output.relative_to(self.project_root)}", "text": manual_text, "file": self._url(output), "preview": self._url(upload)})
             return
-        if method == "metadata" and name not in load_metadata(metadata_path):
-            raise RuntimeError("No metadata label exists for this image. Choose Auto or Qwen to transcribe a new image.")
-        result = image_to_pdf(str(upload), output_path=str(output), method=method, metadata_path=metadata_path, tesseract_lang=data.get("language") or "eng", preprocess=data.get("preprocess", "none"), ensemble_preprocess=bool(data.get("ensemble", False)))
+        result = image_to_pdf(str(upload), output_path=str(output), preprocess=data.get("preprocess", "none"))
         self._json({"ok": True, "status": f"Recognized with {result.method}: {output.relative_to(self.project_root)}", "text": result.text, "file": self._url(output), "preview": self._url(upload)})
 
 

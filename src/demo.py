@@ -40,7 +40,7 @@ def run_demo(output_dir: str = "outputs/demo") -> dict:
         if not path.exists():
             continue
         output_path = out / "ocr" / f"{path.stem}.pdf"
-        result = image_to_pdf(str(path), output_path=str(output_path), method="metadata")
+        result = image_to_pdf(str(path), output_path=str(output_path))
         ocr_results.append({"image": str(path), "text": result.text, "output": result.output_path})
         summary["artifacts"].append(result.output_path)
         rows.append(f"- `{path.name}` -> `{output_path}`: {result.text}")
@@ -91,8 +91,8 @@ def run_demo(output_dir: str = "outputs/demo") -> dict:
             "## Honest Status",
             "",
             "- The project demonstrates both directions: handwriting image to text PDF, and text to handwriting-style PDF.",
-            "- OCR for bundled dataset images is validated through metadata labels.",
-            "- OCR for arbitrary unknown handwriting requires Tesseract or Qwen and remains the main improvement area.",
+            "- Handwriting images are transcribed with Qwen OCR.",
+            "- OCR accuracy on arbitrary handwriting remains the main improvement area.",
             "- Truly personal handwriting requires filled template sheets from the target writer.",
         ]
     )

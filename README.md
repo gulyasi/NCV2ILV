@@ -17,8 +17,7 @@ The current recommended rendering engine is `hybrid`. It keeps connected cursive
 
 - Local browser GUI with mode switching between both conversion directions.
 - OCR for new uploaded images through Qwen vision-language OCR.
-- Metadata lookup for bundled labeled samples.
-- Optional local Tesseract OCR with preprocessing and ensemble selection.
+- Optional image preprocessing before Qwen OCR.
 - Text rendering to page-sized PNG or PDF files.
 - Four handwriting rendering engines.
 - Hybrid rendering that mixes connected cursive with learned glyph texture.
@@ -32,9 +31,10 @@ The current recommended rendering engine is `hybrid`. It keeps connected cursive
 Handwriting image
       |
       v
-Metadata lookup -> Tesseract OCR -> Qwen OCR
-      |                 |              |
-      +-----------------+--------------+
+              optional preprocessing
+                        |
+                        v
+                    Qwen OCR
                         |
                         v
                 recognized text
@@ -53,11 +53,7 @@ handwriting-style PNG or PDF
 
 ### Handwriting-to-Text Pipeline
 
-The `auto` OCR method tries the following in order:
-
-1. **Metadata lookup** for filenames listed in `data/metadata.csv`.
-2. **Tesseract OCR** when the `tesseract` executable is installed.
-3. **Qwen OCR** using `Qwen/Qwen3.5-0.8B` for new images.
+All handwriting images are transcribed with **Qwen OCR** using `Qwen/Qwen3.5-0.8B`.
 
 Qwen is loaded through Hugging Face Transformers and cached in memory for the lifetime of the process. The first run may download model files and take longer. CUDA is used when available.
 
@@ -68,7 +64,6 @@ Optional preprocessing modes are:
 - `otsu`
 - `adaptive`
 - `denoise-deskew`
-- Tesseract preprocessing ensemble
 
 ### Text-to-Handwriting Engines
 
@@ -226,19 +221,11 @@ uv run python main.py render "A personal handwriting sample" \
 - Python `3.12` or newer
 - `uv` package manager
 - CUDA-capable GPU recommended for Qwen OCR
-- Optional: Tesseract for lightweight local OCR
 
 Install the Python environment:
 
 ```bash
 uv sync
-```
-
-Optional Tesseract installation on Ubuntu/Debian:
-
-```bash
-sudo apt-get update
-sudo apt-get install tesseract-ocr tesseract-ocr-eng tesseract-ocr-deu
 ```
 
 The first Qwen OCR request may download model files from Hugging Face. Set `HF_TOKEN` if authenticated downloads or higher rate limits are required.
@@ -268,12 +255,11 @@ The command prefers `http://127.0.0.1:8000`. If that port is occupied, it select
 
 1. Select **Handwriting to Text**.
 2. Upload an image.
-3. Leave OCR method set to `auto` for normal use.
-4. Optionally select preprocessing.
-5. Choose an output PDF path.
-6. Press **Recognize Handwriting**.
+3. Optionally select preprocessing.
+4. Choose an output PDF path.
+5. Press **Recognize Handwriting**.
 
-For a new image, `auto` falls through to Qwen when metadata and Tesseract are unavailable. A manual transcription field is also available as a fallback for producing the formatted PDF without OCR.
+Qwen is the automatic OCR backend. A manual transcription field is also available as a fallback for producing the formatted PDF without OCR.
 
 ### Recommended CLI Commands
 
@@ -295,30 +281,19 @@ uv run python main.py handwrite "This is connected cursive." \
   -o outputs/script_handwriting.pdf
 ```
 
-Transcribe a new image using automatic OCR selection:
+Transcribe a new image with Qwen:
 
 ```bash
 uv run python main.py image-to-pdf path/to/new_image.png \
-  --method auto \
   -o outputs/transcription.pdf
 ```
 
-Transcribe explicitly with Qwen:
+Transcribe with preprocessing:
 
 ```bash
 uv run python main.py image-to-pdf path/to/new_image.png \
-  --method qwen \
   --preprocess denoise-deskew \
   -o outputs/qwen_transcription.pdf
-```
-
-Use Tesseract preprocessing ensemble:
-
-```bash
-uv run python main.py image-to-pdf path/to/new_image.png \
-  --method tesseract \
-  --ensemble-preprocess \
-  -o outputs/tesseract_transcription.pdf
 ```
 
 ## Command Reference
@@ -387,7 +362,7 @@ The evaluation computes:
 - Sequence similarity
 - Exact match
 
-The bundled evaluation uses metadata labels on known samples. This validates the image-to-PDF pipeline but is an oracle test, not evidence of arbitrary-image OCR accuracy. Use `src/qwen_benchmark.py` or run Qwen/Tesseract against a separately labeled test set to evaluate real OCR generalization.
+The bundled evaluation compares Qwen predictions with the ground-truth labels in `data/metadata.csv`. Use a separately labeled test set to evaluate broader OCR generalization.
 
 Run the Qwen sample benchmark:
 
@@ -427,7 +402,7 @@ outputs/demo/demo_summary.json
 ├── src/
 │   ├── composer.py               # Font, script, glyph, and hybrid renderers
 │   ├── gui.py                    # Local browser GUI and API
-│   ├── ocr_pipeline.py           # OCR selection and text-PDF generation
+│   ├── ocr_pipeline.py           # Qwen OCR and text-PDF generation
 │   ├── ocr_preprocessing.py      # Thresholding, denoising, and deskewing
 │   ├── translate.py              # Qwen OCR wrapper
 │   ├── train.py                  # Baseline glyph-classifier training
@@ -448,7 +423,6 @@ outputs/demo/demo_summary.json
 - The bundled style library combines multiple samples and is not guaranteed to represent one consistent writer.
 - Real personalization requires a clean filled template from the target writer.
 - Qwen OCR accuracy depends on image quality, language, model behavior, and available compute.
-- Tesseract must be installed separately.
 - The current page renderer creates one page and reports overflow rather than automatically creating additional pages.
 - Existing rendering evaluation measures coverage and layout, not human-rated realism.
 
@@ -456,17 +430,11 @@ outputs/demo/demo_summary.json
 
 ### A new image cannot be transcribed
 
-Use `auto` or `qwen` rather than `metadata`:
-
 ```bash
-uv run python main.py image-to-pdf path/to/image.png --method auto
+uv run python main.py image-to-pdf path/to/image.png
 ```
 
-For Qwen, confirm that model downloads are allowed and sufficient memory is available. For Tesseract, confirm installation with:
-
-```bash
-tesseract --version
-```
+Confirm that model downloads are allowed and sufficient memory is available.
 
 ### Glyph output contains fragments or incorrect characters
 

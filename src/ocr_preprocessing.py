@@ -10,7 +10,6 @@ import numpy as np
 
 
 PREPROCESSING_MODES = ("none", "grayscale", "otsu", "adaptive", "denoise-deskew")
-ENSEMBLE_MODES = ("none", "otsu", "adaptive", "denoise-deskew")
 
 
 def _ensure_white_background(gray: np.ndarray) -> np.ndarray:

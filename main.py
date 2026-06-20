@@ -44,11 +44,7 @@ def main() -> None:
     ocr_parser = subparsers.add_parser("image-to-pdf", help="Transcribe a handwritten image and save recognized text as PDF")
     ocr_parser.add_argument("image")
     ocr_parser.add_argument("-o", "--output", default="outputs/transcription.pdf")
-    ocr_parser.add_argument("--method", choices=["auto", "metadata", "tesseract", "qwen"], default="auto")
-    ocr_parser.add_argument("--metadata", default="data/metadata.csv")
-    ocr_parser.add_argument("--tesseract-lang", default="eng")
     ocr_parser.add_argument("--preprocess", choices=PREPROCESSING_MODES, default="none")
-    ocr_parser.add_argument("--ensemble-preprocess", action="store_true")
 
 
     handwrite_parser = subparsers.add_parser("handwrite", help="Render text using glyph-based handwriting")
@@ -127,11 +123,7 @@ def main() -> None:
         result = image_to_pdf(
             args.image,
             output_path=args.output,
-            method=args.method,
-            metadata_path=args.metadata,
-            tesseract_lang=args.tesseract_lang,
             preprocess=args.preprocess,
-            ensemble_preprocess=args.ensemble_preprocess,
         )
         print(f"Created {result.output_path}")
         print(f"Method: {result.method}")

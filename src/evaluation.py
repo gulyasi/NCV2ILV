@@ -1,4 +1,5 @@
 import argparse
+import csv
 import difflib
 import json
 from dataclasses import asdict
@@ -8,7 +9,7 @@ from statistics import mean
 from .composer import compose
 from .golden_set import GOLDEN_QUERIES
 from .ocr_metrics import character_error_rate, word_error_rate
-from .ocr_pipeline import image_to_pdf, load_metadata
+from .ocr_pipeline import image_to_pdf
 from .synthetic_glyphs import generate_synthetic_glyphs
 
 RENDER_MODELS = [
@@ -70,7 +71,8 @@ def summarize_render(rows: list[dict]) -> list[dict]:
 
 
 def run_ocr_benchmark(out: Path, metadata_path: str = "data/metadata.csv") -> list[dict]:
-    metadata = load_metadata(metadata_path)
+    with Path(metadata_path).open(newline="", encoding="utf-8") as f:
+        metadata = {row["file_name"]: row["label"] for row in csv.DictReader(f)}
     ocr_dir = out / "ocr"
     ocr_dir.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -79,7 +81,7 @@ def run_ocr_benchmark(out: Path, metadata_path: str = "data/metadata.csv") -> li
         image = Path("data/raw_handwriting") / name
         if not expected or not image.exists():
             continue
-        result = image_to_pdf(str(image), output_path=str(ocr_dir / f"{image.stem}.pdf"), method="metadata")
+        result = image_to_pdf(str(image), output_path=str(ocr_dir / f"{image.stem}.pdf"))
         similarity = difflib.SequenceMatcher(None, expected, result.text).ratio()
         cer = character_error_rate(expected, result.text)
         wer = word_error_rate(expected, result.text)
@@ -94,7 +96,7 @@ def run_ocr_benchmark(out: Path, metadata_path: str = "data/metadata.csv") -> li
                 "character_error_rate": cer,
                 "word_error_rate": wer,
                 "output_path": result.output_path,
-                "note": "Metadata method is oracle validation of PDF pipeline, not arbitrary OCR.",
+                "note": "Qwen prediction compared with the dataset's ground-truth label.",
             }
         )
     return rows
@@ -109,7 +111,7 @@ def write_report(out: Path, render_rows: list[dict], render_summary: list[dict],
         "",
         "This report compares baseline renderers against the current proposed handwriting renderer, and validates the handwriting-image-to-text-PDF pipeline on labeled dataset samples.",
         "",
-        "The OCR numbers below use metadata labels for bundled dataset images. That is an oracle pipeline validation, not proof of arbitrary OCR generalization.",
+        "The OCR numbers below compare Qwen predictions with ground-truth labels for bundled dataset images.",
         "",
         "## Text-To-Handwriting Benchmark",
         "",
@@ -144,7 +146,7 @@ def write_report(out: Path, render_rows: list[dict], render_summary: list[dict],
         "- `baseline_extracted_glyph_retrieval` exposes the weakness of noisy segmentation-derived glyphs.",
         "- `proposed_script_renderer` is the current model used for demo-quality text-to-handwriting because it creates connected pen-stroke output without requiring filled writer templates.",
         "- For OCR experiments, CER/WER are the primary recognition metrics; sequence similarity is kept only as a quick readability signal.",
-        "- Paper-inspired preprocessing modes are available through `image-to-pdf --preprocess ...` and `--ensemble-preprocess` for Tesseract-backed OCR.",
+        "- Preprocessing modes are available through `image-to-pdf --preprocess ...` for Qwen OCR.",
         "- The next real improvement is collecting writer-specific template glyphs or training a conditional glyph generator.",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
